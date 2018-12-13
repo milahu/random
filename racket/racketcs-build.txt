@@ -1,0 +1,59 @@
+gcc  \
+-m64 -msse2 -Wpointer-arith -Wall -Wextra -Werror -Wno-implicit-fallthrough \
+-O2 -D_REENTRANT -pthread -march=core2 \
+-O2 -pipe -fPIC -Wall -DELF_FIND_BOOT_SECTION -pthread \
+-c -DX86_64 -I../boot/ta6le -I../zlib scheme.c
+
+ln -s ../../c/i3le.c i3le.c
+gcc  \
+-m64 -msse2 -Wpointer-arith -Wall -Wextra -Werror -Wno-implicit-fallthrough \
+-O2 -D_REENTRANT -pthread -march=core2 \
+-O2 -pipe -fPIC -Wall -DELF_FIND_BOOT_SECTION -pthread \
+-c -DX86_64 -I../boot/ta6le -I../zlib i3le.c
+
+(cd ../zlib; make)
+cc -m64 -D_LARGEFILE64_SOURCE=1 -I. -c -o example.o test/example.c
+cc -m64 -D_LARGEFILE64_SOURCE=1  -c -o adler32.o adler32.c
+cc -m64 -D_LARGEFILE64_SOURCE=1  -c -o crc32.o crc32.c
+cc -m64 -D_LARGEFILE64_SOURCE=1  -c -o deflate.o deflate.c
+[...]
+
+ar rc libz.a \
+adler32.o crc32.o deflate.o infback.o inffast.o inflate.o inftrees.o \
+trees.o zutil.o compress.o uncompr.o gzclose.o gzlib.o gzread.o gzwrite.o 
+
+cc -m64 -D_LARGEFILE64_SOURCE=1 -o example example.o -L. libz.a
+cc -m64 -D_LARGEFILE64_SOURCE=1 -I. -c -o minigzip.o test/minigzip.c
+cc -m64 -D_LARGEFILE64_SOURCE=1 -o minigzip minigzip.o -L. libz.a
+cc -m64 -D_LARGEFILE64_SOURCE=1  -DPIC -c -o objs/adler32.o adler32.c
+cc -m64 -D_LARGEFILE64_SOURCE=1  -DPIC -c -o objs/crc32.o crc32.c
+cc -m64 -D_LARGEFILE64_SOURCE=1  -DPIC -c -o objs/deflate.o deflate.c
+[...]
+
+cc \
+-shared -m64 -D_LARGEFILE64_SOURCE=1 \
+-o libz.so.1.2.11 \
+adler32.lo crc32.lo deflate.lo infback.lo inffast.lo inflate.lo inftrees.lo \
+ trees.lo zutil.lo compress.lo uncompr.lo gzclose.lo gzlib.lo gzread.lo gzwrite.lo  \
+-lc 
+
+/usr/bin/ld: deflate.lo: \
+relocation R_X86_64_PC32 against symbol `z_errmsg' can not be used \
+when making a shared object; recompile with -fPIC
+
+/usr/bin/ld: final link failed: bad value
+collect2: error: ld returned 1 exit status
+make[8]: *** [Makefile:282: libz.so.1.2.11] Error 1
+make[7]: *** [Mf-base:63: ../zlib/libz.a] Error 2
+make[6]: *** [Makefile:20: build] Error 2
+make[5]: *** [Makefile:19: build] Error 2
+make[5]: Leaving directory '/tmp2/racketcs.1544543692/racket/src/build/ChezScheme'
+make[4]: *** [Makefile:126: scheme-make] Error 2
+make[4]: Leaving directory '/tmp2/racketcs.1544624840/racket/src/build/cs'
+make[3]: *** [Makefile:121: scheme] Error 2
+make[3]: Leaving directory '/tmp2/racketcs.1544624840/racket/src/build/cs'
+make[2]: *** [Makefile:47: cs] Error 2
+make[2]: Leaving directory '/tmp2/racketcs.1544624840/racket/src/build/cs'
+make[1]: *** [Makefile:87: racketcs] Error 2
+make[1]: Leaving directory '/tmp2/racketcs.1544624840/racket/src/build'
+make: *** [Makefile:91: cs] Error 2
