@@ -1,0 +1,230 @@
+$ pwd
+/home/user/src/c/libmill/libmill-git-2dd13ae
+
+$ git rev-parse --short HEAD
+2dd13ae
+
+$ find . -name '*.c' -exec grep ^printf '{}' \; | wc -l \
+| xargs -I'{}' cowsay '{}' printfs = poor mans debugger
+ _________________________________ 
+< 90 printfs = poor mans debugger >
+ --------------------------------- 
+        \   ^__^
+         \  (oo)\_______
+            (__)\       )\/\
+                ||----w |
+                ||     ||
+
+$ time resolveip www.example.org
+IP address of www.example.org is 93.184.216.34
+
+real	0m0.019s
+user	0m0.005s
+sys	0m0.009s
+
+$ make clean; make; make check; ./tests/ip | tee ip-out.txt
+tests/ip. ETIMEDOUT = 110
+tests/ip. EADDRNOTAVAIL = 99
+
+tests/ip. call ipremote with ipv4
+
+ipremote. call mill_ipliteral
+ipremote. call dns_resconf_local
+ipremote. call dns_hosts_local
+ipremote. call dns_hints_local
+ipremote. call dns_res_open
+dns_res_open. call dns_resconf_acquire
+dns_res_open. call dns_hosts_acquire
+dns_res_open. call dns_hints_acquire
+dns_res_open. call dns_so_init
+dns_res_open. done dns_so_init. error = 32637
+dns_res_open. return R
+ipremote. call dns_ai_open
+ipremote. call dns_ai_open. name = www.example.org
+ipremote. call dns_ai_open. portstr = 80
+ipremote. call dns_ai_open. DNS_T_A = 1
+ipremote. call dns_ai_open. resolver = 0x561c2511ee20
+ipremote. call dns_ai_open. rc = 0
+dns_ai_open. res = 0x561c2511ee20
+dns_ai_open. call dns_res_acquire
+dns_ai_open. set res = 0x561c2511ee20
+dns_ai_open. return ai
+done dns_ai_open, rc = 0
+ipremote. call dns_res_close
+ipremote. call while true
+ipremote. EAGAIN = 11
+
+ipremote. loop 0 ...
+
+ipremote. call dns_ai_nextent
+dns_ai_nextent. call dns_res_submit
+dns_ai_nextent. call dns_res_check
+dns_ai_nextent. call dns_res_fetch
+dns_ai_nextent. call dns_p_study
+dns_ai_nextent. call dns_d_expand
+dns_ai_nextent. call dns_d_cname
+dns_ai_nextent. rcode = 2
+dns_ai_nextent. return efail
+ipremote. rc = -1684960053
+ipremote. it = (nil)
+ipremote. break?
+ipremote. it   = (nil)
+ipremote. ipv4 = (nil)
+ipremote. ipv6 = (nil)
+ipremote. no break. continue while true
+ipremote. sleep 1
+
+ipremote. loop 1 ...
+
+ipremote. call dns_ai_nextent
+dns_ai_nextent. rcode = 2
+dns_ai_nextent. return efail
+ipremote. rc = -1684960053
+ipremote. it = (nil)
+ipremote. break?
+ipremote. it   = (nil)
+ipremote. ipv4 = (nil)
+ipremote. ipv6 = (nil)
+ipremote. no break. continue while true
+ipremote. sleep 1
+
+ipremote. loop 2 ...
+
+ipremote. call dns_ai_nextent
+dns_ai_nextent. rcode = 2
+dns_ai_nextent. return efail
+ipremote. rc = -1684960053
+ipremote. it = (nil)
+ipremote. break?
+ipremote. it   = (nil)
+ipremote. ipv4 = (nil)
+ipremote. ipv6 = (nil)
+ipremote. no break. continue while true
+ipremote. sleep 1
+
+ipremote. loop 3 ...
+
+ipremote. call dns_ai_nextent
+dns_ai_nextent. rcode = 2
+dns_ai_nextent. return efail
+ipremote. rc = -1684960053
+ipremote. it = (nil)
+ipremote. break?
+ipremote. it   = (nil)
+ipremote. ipv4 = (nil)
+ipremote. ipv6 = (nil)
+ipremote. no break. continue while true
+ipremote. sleep 1
+
+ipremote. done while true
+
+ipremote. mode = 1
+ipremote. IPADDR_IPV4 = 1
+ipremote. IPADDR_IPV6 = 2
+ipremote. IPADDR_PREF_IPV4 = 3
+ipremote. IPADDR_PREF_IPV6 = 4
+ipremote. mode is ipv4
+ipremote. mode is ipv4. break
+ipremote. call dns_ai_close
+tests/ip. resolve 4 done, errno = 99
+
+tests/ip. call ipremote with ipv6
+
+ipremote. call mill_ipliteral
+ipremote. call dns_res_open
+dns_res_open. call dns_resconf_acquire
+dns_res_open. call dns_hosts_acquire
+dns_res_open. call dns_hints_acquire
+dns_res_open. call dns_so_init
+dns_res_open. done dns_so_init. error = 32637
+dns_res_open. return R
+ipremote. call dns_ai_open
+ipremote. call dns_ai_open. name = www.example.org
+ipremote. call dns_ai_open. portstr = 80
+ipremote. call dns_ai_open. DNS_T_A = 1
+ipremote. call dns_ai_open. resolver = 0x561c2511ee20
+ipremote. call dns_ai_open. rc = 32767
+dns_ai_open. res = 0x561c2511ee20
+dns_ai_open. call dns_res_acquire
+dns_ai_open. set res = 0x561c2511ee20
+dns_ai_open. return ai
+done dns_ai_open, rc = 32767
+ipremote. call dns_res_close
+ipremote. call while true
+ipremote. EAGAIN = 11
+
+ipremote. loop 0 ...
+
+ipremote. call dns_ai_nextent
+dns_ai_nextent. call dns_res_submit
+dns_ai_nextent. call dns_res_check
+dns_ai_nextent. call dns_res_fetch
+dns_ai_nextent. call dns_p_study
+dns_ai_nextent. call dns_d_expand
+dns_ai_nextent. call dns_d_cname
+dns_ai_nextent. rcode = 2
+dns_ai_nextent. return efail
+ipremote. rc = -1684960053
+ipremote. it = (nil)
+ipremote. break?
+ipremote. it   = (nil)
+ipremote. ipv4 = (nil)
+ipremote. ipv6 = (nil)
+ipremote. no break. continue while true
+ipremote. sleep 1
+
+ipremote. loop 1 ...
+
+ipremote. call dns_ai_nextent
+dns_ai_nextent. rcode = 2
+dns_ai_nextent. return efail
+ipremote. rc = -1684960053
+ipremote. it = (nil)
+ipremote. break?
+ipremote. it   = (nil)
+ipremote. ipv4 = (nil)
+ipremote. ipv6 = (nil)
+ipremote. no break. continue while true
+ipremote. sleep 1
+
+ipremote. loop 2 ...
+
+ipremote. call dns_ai_nextent
+dns_ai_nextent. rcode = 2
+dns_ai_nextent. return efail
+ipremote. rc = -1684960053
+ipremote. it = (nil)
+ipremote. break?
+ipremote. it   = (nil)
+ipremote. ipv4 = (nil)
+ipremote. ipv6 = (nil)
+ipremote. no break. continue while true
+ipremote. sleep 1
+
+ipremote. loop 3 ...
+
+ipremote. call dns_ai_nextent
+dns_ai_nextent. rcode = 2
+dns_ai_nextent. return efail
+ipremote. rc = -1684960053
+ipremote. it = (nil)
+ipremote. break?
+ipremote. it   = (nil)
+ipremote. ipv4 = (nil)
+ipremote. ipv6 = (nil)
+ipremote. no break. continue while true
+ipremote. sleep 1
+
+ipremote. done while true
+
+ipremote. mode = 2
+ipremote. IPADDR_IPV4 = 1
+ipremote. IPADDR_IPV6 = 2
+ipremote. IPADDR_PREF_IPV4 = 3
+ipremote. IPADDR_PREF_IPV6 = 4
+ipremote. mode is ipv6
+ipremote. mode is ipv6. break
+ipremote. call dns_ai_close
+tests/ip. resolve 6 done, errno = 99
+tests/ip. return
+
