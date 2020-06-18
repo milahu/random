@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+<meta charset="utf-8">
+
+  <style>
+    body {
+      color: white;
+      background: black;
+      font-family: monospace;
+    }
+  </style>
+
+  <script>
+    let questions = [
+      /*
+        {
+            "question": "Oppression by corporations is more of a concern than oppression by governments.",
+            "effect": {
+                "econ": 10,
+                "dipl": 0,
+                "govt": 0,
+                "scty": 0
+            }
+        },
+      */
+    ];
+  </script>
+
+  <script src="questions.js"></script>
+
+</head>
+<body>
+
+
+
+  <h2>8values questions, plot of effect signs</h2>
+
+  <p>hover the red circle to see the question</p>
+
+  <svg width="600" height="600" style="border: solid 1px white">
+    <!-- center cross -->
+    <defs>
+      <symbol id="H" width="200" height="200">
+        <g stroke-width="2">
+          <line x1="000" x2="200" y1="100" y2="100" />
+          <line x1="000" x2="000" y1="000" y2="200" />
+          <line x1="200" x2="200" y1="000" y2="200" />
+        </g>
+      </symbol>
+    </defs>
+    <g stroke="white" fill="none">
+
+      <use xlink:href="#H" x="200" y="200" />
+      
+      <use xlink:href="#H" x="150" y="150" transform="scale(.8)" />
+      <use xlink:href="#H" x="400" y="150" transform="scale(.8)" />
+      <use xlink:href="#H" x="400" y="400" transform="scale(.8)" />
+      <use xlink:href="#H" x="150" y="400" transform="scale(.8)" />
+
+      <script type="text/javascript"><![CDATA[
+        
+        const k = ["econ", "dipl", "govt", "scty"];
+
+        function f_effect (i) {
+          return Math.sign(i) * 10; // normalize to size 10
+        }
+
+        questions.forEach(q => {
+          
+          const a = f_effect(q.effect[k[0]]);
+          const b = f_effect(q.effect[k[1]]);
+          const c = f_effect(q.effect[k[2]]);
+          const d = f_effect(q.effect[k[3]]);
+
+          const s1 = 10;
+          const s2 = 0.8;
+          //const s2 = 1;
+
+          const a2 = s1 * a;
+          const b2 = s1 * b;
+          const c2 = s1 * c * +1 * s2;
+          const d2 = s1 * d * +1 * s2;
+
+          //const {econ, dipl, govt, scty} = 
+
+          const x = 300 + a2 + c2;
+          const y = 300 + b2 + d2;
+
+          document.write(`<path stroke="red" d="M 300 300 h ${a2} v ${b2} h ${c2} v ${d2}" />`);
+          document.write(`
+            <circle fill="red" stroke="none" cx="${x}" cy="${y}" r="5">
+              <title>${q.question} = ${a} ${b} ${c} ${d}</title>
+            </circle>
+          `);
+        });
+      ]]></script>
+
+      <circle fill="black" cx="300" cy="300" r="5" />
+    </g>
+  </svg>
+
+
+
+  <h2>8values questions, ordered by effect</h2>
+
+  <script>
+    let value = {
+
+      // similar values
+      // dipl+ = govt+ = scty+ [ = econ+ ]
+
+      /*
+        exceptions
+        {
+            "question": "Even when protesting an authoritarian government, violence is not acceptable.",
+            "effect": {
+                "econ": 0,
+                "dipl": 5,
+                "govt": -5,
+                "scty": 0
+            }
+        },
+      */
+
+      /*
+        catch-all questions
+
+        + = equality
+        - = difference
+
+        {
+            "question": "All people - regardless of factors like culture or sexuality - should be treated equally.",
+            "effect": {
+                "econ": 10,
+                "dipl": 10,
+                "govt": 10,
+                "scty": 10
+            }
+        },
+
+        {
+            "question": "It is important that we further my group's goals above all others.",
+            "effect": {
+                "econ": -10,
+                "dipl": -10,
+                "govt": -10,
+                "scty": -10
+            }
+        }
+      */
+
+
+
+      "econ+": [], // equality, economic security, public schools, high tax, distribute wealth, donation economy, forced/public insurance, tolerance
+
+      "econ-": [], // free market, economic freedom, competition, low tax, accumulate wealth, exchange economy, voluntary/private insurance, separation, difference
+
+
+
+      "dipl+": [], // world, united nations, world government, pacifism, all "cultures" are equal, free migration, all people are equal [humanism, socialsim, neurotic ideal], global trade, global tourism
+
+      "dipl-": [], // nation, many small strong states, local order, strong military, competition of small states, tribalism, violence?, some cultures are better, 
+
+
+
+      "govt+": [], // liberty, majority vote, united nations, pacifistic government [private military], guns for all, drugs for all, anti state, anti authority, democracy, bisexual, all cultures are equal, all people are equal, free migration
+
+      "govt-": [], // authority, strong nation, public military, local order, hierarchy/separation, strong vs weak, strong leader, education is traditional [earth], sexual monogamy, minimize migration, only soldiers have guns [privilege], anti prostitution, in-group preference, local tourism
+
+
+
+      "scty+": [], // progress, transhumanism, genetic engineering, high tech, faith in technology, technocracy, public research, all people are equal, all cultures are equal, 
+
+      "scty-": [], // tradition, religion, some cultures are better, low tech, primitive culture, natural medicine, 
+
+
+
+    };
+
+    const e_keys = Object.keys(questions[0].effect);
+
+    function my_sign(n) {
+      if (n == 0) return "";
+      return (n > 0) ? "+" : "-";
+    }
+
+    questions.forEach(q => {
+      const e = q.effect;
+      e_keys.forEach(k => {
+        const v = e[k];
+        if (v == 0) return;
+        value[
+          k + my_sign(v)
+        ].push(
+          [Math.abs(v), q.question]
+        );
+      });
+    });
+
+    document.write('<pre>');
+    e_keys.forEach(k => {
+      //document.write(k + "\n");
+      ["-", "+"].forEach(s => {
+        value[k + s].forEach(([v, q]) => {
+          const vs = v.toString().padStart(2, " ");
+          document.write(`${k}${s} ${vs} ${q}\n`)
+        });
+        document.write("\n");
+      });
+      document.write("\n\n");
+    });
+    document.write('</pre>');
+
+  </script>
+
+</body>
+</html>
