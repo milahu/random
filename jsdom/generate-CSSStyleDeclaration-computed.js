@@ -6,7 +6,7 @@
 // by calling Object.defineProperty on the class prototype
 // https://levelup.gitconnected.com/using-prototype-vs-this-in-a-javascript-class-can-help-save-memory-816636418c3e
 
-// this is the generator. result is in
+// this (4KB) is the generator. result (110KB) is in
 const fo = '../lib/jsdom/living/generated/CSSStyleDeclaration-computed.js';
 
 // TODO restore DOMException.create
