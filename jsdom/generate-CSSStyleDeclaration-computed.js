@@ -12,6 +12,8 @@ const fo = '../lib/jsdom/living/generated/CSSStyleDeclaration-computed.js';
 // TODO restore DOMException.create
 // TODO fix P.item function (etc?)
 // TODO seal object? (no new props)
+// "TODO hide these props with Object.defineProperty"
+// TODO expose pseudo-props of CSSStyleDeclaration
 
 // license is CC0-1.0
 // aka "just steal my code and shut up license"
@@ -72,6 +74,8 @@ const DOMException = require("domexception/webidl2js-wrapper");
 
 class CSSStyleDeclaration {
   constructor(_window, defaultStyle, customStyle) {
+
+    // TODO hide these props with Object.defineProperty
     this._window = _window;
     this._D = defaultStyle;
     this._C = customStyle;
