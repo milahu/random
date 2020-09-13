@@ -1,3 +1,4 @@
+// jsdom/scripts/generate-CSSStyleDeclaration-computed.js
 // custom proxy class (invisible proxy)
 // to make proxy look like CSSStyleDeclaration object
 
