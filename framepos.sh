@@ -335,6 +335,7 @@ EOF
 				#)
 
 				# frame minus one:
+				echo "awk: t = $T1 + ( ( $res - 2 ) / $fps"
 				t=$(
 					echo $T1 $res $fps \
 					| awk '{printf "%.4f\n", $1 + ( ( $2 - 2 ) / $3 ) }'
