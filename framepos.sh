@@ -162,9 +162,11 @@ function framepos() {
 		if [[ "${T1:0:1}" = "-" ]]
 		then
 			#echo "got negative t1 $T1" >&2
+			echo "awk: T1 = int(($dur + $T1) * $fps + 0.5) / $fps"
 			T1=$(echo $T1 $fps $dur \
 				| awk '{printf "%.4f\n", int(($3 + $1) * $2 + 0.5) / $2}')
 		else
+			echo "awk: T1 = int($T1 * $fps + 0.5) / $fps"
 			T1=$(echo $T1 $fps \
 				| awk '{printf "%.4f\n", int($1 * $2 + 0.5) / $2}')
 		fi
@@ -174,9 +176,11 @@ function framepos() {
 		if [[ "${T2:0:1}" = "-" ]]
 		then
 			#echo "got negative t2 $T2" >&2
+			echo "awk: T2 = int(($dur + $T1) * $fps + 0.5) / $fps"
 			T2=$(echo $T2 $fps $dur \
 				| awk '{printf "%.4f\n", int(($3 + $1) * $2 + 0.5) / $2}')
 		else
+			echo "awk: T2 = int($T1 * $fps + 0.5) / $fps"
 			T2=$(echo $T2 $fps \
 				| awk '{printf "%.4f\n", int($1 * $2 + 0.5) / $2}')
 		fi
@@ -309,6 +313,7 @@ EOF
 
 			if [ ! -z "$res" ]
 			then
+				echo "found res: $res"
 				res=$(
 					echo "$res" \
 					| sed 's/\t\t\t\t/\n/g' \
@@ -335,7 +340,7 @@ EOF
 					| awk '{printf "%.4f\n", $1 + ( ( $2 - 2 ) / $3 ) }'
 				)
 
-				echo "match t = $t" >&2
+				echo "match t = $t   i = $res" >&2
 
 
 				# no range search
