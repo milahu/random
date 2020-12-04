@@ -10,16 +10,18 @@
 cmd="$1"
 shift
 
+base="$(basename "$cmd")"
+
 # add arguments to force color output
 # TODO add more commands here
 extra_args=''
-if [[ ' diff ls cargo ' =~ " $cmd " ]]; then
+if [[ ' diff ls cargo ' =~ " $base " ]]; then
     extra_args='--color=always'
-elif [[ ' jp2a ' =~ " $cmd " ]]; then
+elif [[ ' jp2a ' =~ " $base " ]]; then
     extra_args='--colors'
-elif [[ ' gulp ' =~ " $cmd " ]]; then
+elif [[ ' gulp ' =~ " $base " ]]; then
     extra_args='--color'
-elif [[ ' npm ' =~ " $cmd " ]]; then
+elif [[ ' npm ' =~ " $base " ]]; then
     extra_args='--color always'
 fi
 
