@@ -1,0 +1,8 @@
+{
+  "scripts": {
+    "build": "node generate-interface.js"
+  },
+  "devDependencies": {
+    "ts-types-parser": "^1.0.3"
+  }
+}
