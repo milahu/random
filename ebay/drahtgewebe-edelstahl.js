@@ -1,9 +1,19 @@
+/*
+npm init -y
+npm install node-html-parser
+*/
+
 const fs = require('fs')
 const { parse } = require('node-html-parser')
 
 const result = [];
 
 // files p.1.html p.2.html p.3.html were downloaded with web browser (dynamic content ...)
+/*
+https://www.ebay.de/sch/m.html?_nkw=&_armrs=1&_from=&_ssn=kijaporz62&_pgn=1&_skc=200&rt=nc
+https://www.ebay.de/sch/m.html?_nkw=&_armrs=1&_from=&_ssn=kijaporz62&_pgn=2&_skc=200&rt=nc
+https://www.ebay.de/sch/m.html?_nkw=&_armrs=1&_from=&_ssn=kijaporz62&_pgn=3&_skc=200&rt=nc
+*/
 
 for (const p of [1, 2, 3]) {
   const infile = `p.${p}.html`;
@@ -114,7 +124,8 @@ const combinedParticles = allParticles.reduce((acc, p, idx, arr) => {
   }
   else {
     if (p > todoParticles[0] && todoParticles[0] > arr[idx - 1]) {
-      acc.push(`(${todoParticles[0]})`); // no exact match
+      //acc.push(`(${todoParticles[0]})`); // no exact match
+      acc.push(`[${todoParticles[0]}]`); // no exact match
       todoParticles.shift();
     }
     acc.push(p);
