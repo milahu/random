@@ -1,0 +1,18 @@
+{
+  "name": "patch-svelte-compiler-sources",
+  "version": "1.0.0",
+  "description": "fix https://github.com/sveltejs/svelte/issues/4694 Max Stack Size Exceeded for huge HTML",
+  "main": "index.js",
+  "scripts": {
+    "patch": "node index.js"
+  },
+  "keywords": [],
+  "author": "milahu",
+  "license": "CC0-1.0",
+  "dependencies": {
+    "glob": "*",
+    "magic-string": "*",
+    "tosource": "*",
+    "typescript": "*"
+  }
+}
