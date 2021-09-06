@@ -11,7 +11,10 @@
   "license": "CC0-1.0",
   "dependencies": {
     "glob": "*",
+    "locate-character": "*",
     "magic-string": "*",
+    "source-map-closest-match": "github:Cellarise/source-map-closest-match#5bb7eeb6aee964f2594a05981701dcd26cabb787",
+    "source-map-js": "*",
     "tosource": "*",
     "typescript": "*"
   }

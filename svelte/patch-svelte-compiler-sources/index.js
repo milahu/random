@@ -28,6 +28,17 @@
 //   performance is equal on nodejs (spread vs concat)
 
 //const replaceMethod = "spread";
+//const replaceMethod = "pushArray"; // TODO implement
+/*
+Array.prototype._concat_inplace = function(other) { // aka _push_array
+  for (let i = 0; i < other.length; i++) {
+    this.push(other[i]);
+  }
+  return this; // chainable
+};
+
+array1._concat_inplace(array2)._concat_inplace(array3);
+*/
 const replaceMethod = "concat";
 
 const funcName = "push";
@@ -35,7 +46,7 @@ const funcName = "push";
 const do_write = true; // write output file
 
 //const test_input_file = false;
-const test_input_file = "test_typescript.ts";
+//const test_input_file = "test_typescript.ts";
 
 
 
@@ -47,8 +58,127 @@ const fs = require("fs");
 const glob = require("glob");
 const path = require("path");
 const ts = require("typescript");
+//const { SourceMapConsumer } = require('source-map-js'); // https://github.com/7rulnik/source-map
+const { SourceMapConsumer } = require('source-map-closest-match'); // allow fuzzy search for nearest neighbor
+const { getLocator } = require('locate-character'); // https://github.com/Rich-Harris/locate-character
+const child_process = require('child_process'); // git clone
 
 
+
+function exec(cwd, cmd, options = {}) {
+
+  if (options.produceFiles) {
+    for (const f of options.produceFiles) {
+      const p = `${cwd}/${f}`;
+      if (fs.existsSync(p)) {
+        console.log(`\nfile exists: ${p}`)
+        console.log(`ignore: ${cwd} $ ${cmd}\n`);
+        return
+      }
+    }
+  }
+
+  fs.mkdirSync(cwd, { recursive: true });
+
+  let result;
+  try {
+    console.log(`\n${cwd} $ ${cmd}\n`);
+    result = child_process.execSync(cmd, { cwd, windowsHide: true, ...options });
+  }
+  catch (error) {
+    if (options.allowFail) return error;
+    throw error;
+  }
+
+  if (options.produceFiles) {
+    for (const f of options.produceFiles) {
+      const p = `${cwd}/${f}`;
+      if (!fs.existsSync(p)) {
+        throw `error: failed to generate ${p}`
+      }
+    }
+  }
+
+  return result;
+}
+
+
+
+// clone svelte
+exec('src', `git clone --depth 1 https://github.com/sveltejs/svelte.git`, {
+  produceFiles: [ 'svelte', 'svelte/package-lock.json' ]
+})
+
+// install deps with pnpm
+exec('src/svelte', `pnpm import`, {
+  allowFail: true, // ignore error: sh: rollup: command not found https://github.com/pnpm/pnpm/issues/3750
+  produceFiles: [ 'pnpm-lock.yaml' ],
+})
+
+// install deps with pnpm
+// ignore-scripts: dont download puppeteer (only needed to test web-components)
+exec('src/svelte', `pnpm install --ignore-scripts`, {
+  produceFiles: [ 'node_modules' ],
+})
+
+// build svelte
+exec('src/svelte', `npm run build`, {
+  produceFiles: [ 'compiler.js', 'compiler.js.map', 'compiler.mjs', 'compiler.mjs.map' ]
+})
+
+
+
+// locate bugs in src/svelte/compiler.js
+
+var code_old = fs.readFileSync('src/svelte/compiler.js', 'utf8');
+var locate = getLocator(code_old, { offsetLine: 1 }); // lines are one-based and columns are zero-based in SourceMapConsumer
+var smc = new SourceMapConsumer(fs.readFileSync('src/svelte/compiler.js.map', 'utf8'));
+
+
+const ast = acorn_parse(
+  code_old, {
+  // ecmaVersion: 10, // default in year 2019
+  sourceType: 'module',
+});
+
+estree_walk( ast, {
+  enter: function ( node, parent, prop, index ) {
+
+    // node must be array.push()
+    if (
+      node.type !== 'CallExpression' ||
+      node.callee === undefined ||
+      node.callee.property === undefined ||
+      node.callee.property.name !== funcName
+    ) { return; }
+
+    // argument list must include spread operators
+    if (node.arguments.find(
+      a => (a.type == 'SpreadElement')) === undefined)
+    { return; }
+
+    const nodeSrc = code_old.substring(node.start, node.end);
+
+    const pushObj = node.callee.object;
+    const arrayName = code_old.substring(pushObj.start, pushObj.end);
+
+    const pushProp = node.callee.property;
+
+    var nodeLoc = locate(node.start);
+
+    var origLoc = smc.originalPositionFor(nodeLoc);
+
+    //console.dir({ nodeSrc, nodeLoc, origLoc, pushObj, arrayName, pushProp })
+
+    console.log(`TODO patch source file: ${origLoc.source}`)
+
+}});
+
+process.exit();
+
+
+
+process.exit(); // debug
 
 // reverse map, typescript only gives numbers
 ts_SyntaxKind_back = Object.keys(ts.SyntaxKind).reduce((acc, key) => {
