@@ -9,24 +9,32 @@
   license is CC0-1.0
   warranty is none
 
+  based on
+  https://astexplorer.net/
+
 */
 
 const first_input_file = 'src/svelte/compiler.js';
 const backup_file_extension = '.patchbak';
 
 // replaceMethod
-//   original: a.push(...a1, ...a2, e, ...a3); // error: Max Stack Size Exceeded
-//   pushArray: a = a1.pushArray(a2, [e], a3);
-//   concat: a = a1.concat(a2, [e], a3);
-//   spread: a = [...a1, ...a2, e, ...a3];
+//   original: a.push(...a1, e, ...a2); // error: Max Stack Size Exceeded
+//   pushArray: a.pushArray(a1, [e], a2);
+//   pushArrayNoMethod: pushArray(a, a1, [e], a2);
+//   concat: a = a.concat(a1, [e], a2);
+//   spread: a = [...a, ...a1, e, ...a2];
 //   performance is equal on nodejs (spread vs concat)
 
-const replaceMethod = "pushArray";
+const replaceMethod = "pushArrayNoMethod";
+//const replaceMethod = "pushArray";
 //const replaceMethod = "concat";
 //const replaceMethod = "spread";
 
 file_pushArray_js = 'push-array.js';
 file_pushArray_ts = 'push-array.ts';
+
+file_pushArrayNoMethod_js = 'push-array-no-method.js';
+file_pushArrayNoMethod_ts = 'push-array-no-method.ts';
 
 const funcName = "push"; // replace this function
 
@@ -59,9 +67,10 @@ const child_process = require('child_process'); // git clone
 const code_pushArray_js = fs.readFileSync(file_pushArray_js);
 const code_pushArray_ts = fs.readFileSync(file_pushArray_ts);
 
+const code_pushArrayNoMethod_js = fs.readFileSync(file_pushArrayNoMethod_js);
+const code_pushArrayNoMethod_ts = fs.readFileSync(file_pushArrayNoMethod_ts);
+
 patchedFileList = [];
-
-
 
 function exec(cwd, cmd, options = {}) {
 
@@ -82,10 +91,18 @@ function exec(cwd, cmd, options = {}) {
   try {
     //console.log(`\n${cwd} $ ${cmd}\n`);
     console.log(`\n( cd ${cwd} && ${cmd} )\n`);
-    result = child_process.execSync(cmd, { cwd, windowsHide: true, ...options });
+    result = child_process.execSync(cmd, {
+      cwd,
+      windowsHide: true,
+      encoding: 'utf8',
+      stdio: ['inherit', 'inherit', 'inherit'], // show live output
+      ...options
+    });
   }
   catch (error) {
     if (options.allowFail) return error;
+    console.log(`\ncommand failed:`);
+    console.log(`( cd ${cwd} && ${cmd} )\n`);
     throw error;
   }
 
@@ -251,6 +268,7 @@ async function patch_file(input_file, patchState = null, fileHistory = null) {
           const src_node = code_old.substring(ts_node.pos, ts_node.end);
           //console.log(`src_node = ${src_node}`);
 
+          // TODO just use ts_node.expression.expression as arrayName?
           const arrayNameSpaced = code_old.substring(
             ts_node.pos, // too far left, includes whitespace
             (ts_node.expression.name.pos - 1)
@@ -269,6 +287,35 @@ async function patch_file(input_file, patchState = null, fileHistory = null) {
 
           // find ")" bracket after .push arguments
           const idxBracketClose = ts_node.pos + src_node.lastIndexOf(")");
+
+          if (replaceMethod == "pushArrayNoMethod") {
+            // a.push(...b, c) --> pushArray(a, b, [c])
+            code.overwrite(
+              (ts_node.expression.name.pos - 1 - arrayName.length),
+              idxCallBracketOpen + 1, // consume (
+              `pushArray(${arrayName},` // no trailing whitespace. let eslint fix formatting
+            );
+
+            // patch arguments of pushArray()
+            ts_node.arguments.forEach(a => {
+              if (a.kind == ts.SyntaxKind.SpreadElement) {
+                // unspread: ...array --> array
+                const spreadArgSrc = code_old.substring(a.expression.pos, a.expression.end);
+                //console.log('spread argument: '+spreadArgSrc);
+                code.overwrite(a.pos, a.end, spreadArgSrc);
+
+              } else {
+                // enlist: identifer --> [identifer]
+                let argSrc = code_old.substring(a.pos, a.end);
+                const whiteSpaceLen = argSrc.match(/^\s*/)[0].length;
+                const realPos = a.pos + whiteSpaceLen;
+                argSrc = code_old.substring(realPos, a.end);
+
+                //console.log('non spread argument: '+argSrc);
+                code.overwrite(realPos, a.end, "["+argSrc+"]");
+              }
+            });
+          }
 
           if (replaceMethod == "pushArray") {
             // ".push" --> ".pushArray"
@@ -437,6 +484,31 @@ async function patch_file(input_file, patchState = null, fileHistory = null) {
 
         // patch .push(
 
+        if (replaceMethod == "pushArrayNoMethod") {
+          // a.push(...b, c) --> pushArray(a, b, [c])
+          code.overwrite(
+            node.callee.object.start,
+            (pushProp.end + 1),
+            `pushArray(${arrayName},` // no trailing whitespace. let eslint fix formatting
+          );
+
+          // patch arguments of pushArray()
+          node.arguments.forEach(a => {
+            if (a.type == 'SpreadElement') {
+              // unspread: ...array --> array
+              const spreadArgSrc = code_old.substring(a.argument.start, a.argument.end);
+              //console.log('spread argument: '+spreadArgSrc);
+              code.overwrite(a.start, a.end, spreadArgSrc);
+
+            } else {
+              // enlist: element --> [element]
+              const argSrc = code_old.substring(a.start, a.end);
+              //console.log('non spread argument: '+argSrc);
+              code.overwrite(a.start, a.end, "["+argSrc+"]");
+            }
+          });
+        }
+
         if (replaceMethod == "pushArray") {
           // ".push" --> ".pushArray"
           code.overwrite(pushProp.start, pushProp.end, "pushArray");
@@ -457,7 +529,7 @@ async function patch_file(input_file, patchState = null, fileHistory = null) {
             }
           });
         }
-
+  
         if (replaceMethod == "spread") {
           // push --> assign array
 
@@ -528,6 +600,16 @@ async function patch_file(input_file, patchState = null, fileHistory = null) {
     }
     else {
       code = code_pushArray_js + '\n\n' + code;
+    }
+  }
+
+  if (replaceMethod == "pushArrayNoMethod") {
+    // add implementation of array.pushArray
+    if (isTypeScript) {
+      code = code_pushArrayNoMethod_ts + '\n\n' + code;
+    }
+    else {
+      code = code_pushArrayNoMethod_js + '\n\n' + code;
     }
   }
 
@@ -611,15 +693,18 @@ done >fix-push-array.patch
 
 
 // build svelte from patched sourcefiles
+exec('src/svelte', `npm run lint -- --fix`) // required. patching creates ugly syntax
 var runTests = true;
 if (runTests) {
   // this ... is ... slow ... -> allow to skip
-  exec('src/svelte', `npm run lint`)
-
   // remove tests that need puppeteer
   exec('src/svelte', `rm -rf test/custom-elements`)
   exec('src/svelte', `rm -rf test/runtime-puppeteer`)
-  exec('src/svelte', `npm run test`) // run full test. this will first run: npm run build
+  exec('src/svelte', `sed -i "s|runRuntimeSamples('runtime-puppeteer');||" test/server-side-rendering/index.ts`)
+  // run full test. this will first run: npm run build
+  exec('src/svelte', `npm run test`)
+
+  exec('src/svelte', `git restore test`)
 }
 else {
   // this will throw on error
@@ -634,8 +719,27 @@ exec('src/svelte', 'git branch --delete --force fix-maximum-call-stack-size-exce
 exec('src/svelte', 'git branch fix-maximum-call-stack-size-exceeded');
 exec('src/svelte', 'git switch fix-maximum-call-stack-size-exceeded');
 exec('src/svelte', 'git status');
+
+// allow manual postprocessing
+/*
 exec('src/svelte', 'git commit -a -m "fix: Maximum call stack size exceeded (#4694)"');
 exec('src/svelte', 'git remote add fork https://milahu@github.com/milahu/svelte.git', { allowFail: true })
 exec('src/svelte', 'git push fork --force')
-
 // TODO publish patch for code-red
+*/
+console.log(`
+TODO next steps:
+
+cd src/svelte
+git status
+# edit files
+
+git commit -a -m "fix: Maximum call stack size exceeded (#4694)"
+git remote add fork https://milahu@github.com/milahu/svelte.git
+git push fork --force
+
+cp node_modules/.pnpm/code-red@0.2.2/node_modules/code-red/src/print/handlers.js ../code-red/src/print/handlers.js
+cd ../code-red
+# publish patch for code-red
+`)
+
