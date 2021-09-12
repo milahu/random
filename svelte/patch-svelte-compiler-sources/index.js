@@ -20,12 +20,15 @@ const backup_file_extension = '.patchbak';
 // replaceMethod
 //   original: a.push(...a1, e, ...a2); // error: Max Stack Size Exceeded
 //   pushArray: a.pushArray(a1, [e], a2);
-//   pushArrayNoMethod: pushArray(a, a1, [e], a2);
+//   pushArrayNoMethod: push_array(a, a1, [e], a2);
 //   concat: a = a.concat(a1, [e], a2);
 //   spread: a = [...a, ...a1, e, ...a2];
-//   performance is equal on nodejs (spread vs concat)
+// performance depends on input data,
+// but usually push (mutable) is faster than concat (immutable)
 
 const replaceMethod = "pushArrayNoMethod";
+const pushArrayFuncName = "push_array"; // svelte library
+const pushArrayLibraryPathBase = "svelte/src/compiler/utils/push_array"; // svelte library
 //const replaceMethod = "pushArray";
 //const replaceMethod = "concat";
 //const replaceMethod = "spread";
@@ -33,8 +36,10 @@ const replaceMethod = "pushArrayNoMethod";
 file_pushArray_js = 'push-array.js';
 file_pushArray_ts = 'push-array.ts';
 
-file_pushArrayNoMethod_js = 'push-array-no-method.js';
-file_pushArrayNoMethod_ts = 'push-array-no-method.ts';
+//file_pushArrayNoMethod_js = 'push-array-no-method.js';
+//file_pushArrayNoMethod_ts = 'push-array-no-method.ts';
+
+file_pushArrayNoMethod_base = 'push-array-no-method-svelte-module';
 
 const funcName = "push"; // replace this function
 
@@ -67,8 +72,21 @@ const child_process = require('child_process'); // git clone
 const code_pushArray_js = fs.readFileSync(file_pushArray_js);
 const code_pushArray_ts = fs.readFileSync(file_pushArray_ts);
 
+/*
 const code_pushArrayNoMethod_js = fs.readFileSync(file_pushArrayNoMethod_js);
 const code_pushArrayNoMethod_ts = fs.readFileSync(file_pushArrayNoMethod_ts);
+*/
+
+/*
+// TODO for each source file, resolve relative import path
+// typescript error: Cannot find module 'svelte/src/compiler/utils/push_array'
+const code_pushArrayNoMethod_js = `\
+import { ${pushArrayFuncName} } from '${pushArrayLibraryPathBase}';
+
+`;
+const code_pushArrayNoMethod_ts = code_pushArrayNoMethod_js;
+*/
+
 
 patchedFileList = [];
 
@@ -91,13 +109,18 @@ function exec(cwd, cmd, options = {}) {
   try {
     //console.log(`\n${cwd} $ ${cmd}\n`);
     console.log(`\n( cd ${cwd} && ${cmd} )\n`);
-    result = child_process.execSync(cmd, {
+    options = {
       cwd,
       windowsHide: true,
       encoding: 'utf8',
-      stdio: ['inherit', 'inherit', 'inherit'], // show live output
+      stdio: [
+        (options.input ? 'pipe' : 'inherit'),
+        'inherit', 'inherit'// show live output
+      ],
       ...options
-    });
+    }
+    //console.dir({ options })
+    result = child_process.execSync(cmd, options);
   }
   catch (error) {
     if (options.allowFail) return error;
@@ -117,6 +140,14 @@ function exec(cwd, cmd, options = {}) {
 
   return result;
 }
+
+/*
+// TEST
+exec('src/svelte', 'cat', {
+  input: 'hello\n',
+});
+process.exit();
+*/
 
 
 
@@ -293,7 +324,7 @@ async function patch_file(input_file, patchState = null, fileHistory = null) {
             code.overwrite(
               (ts_node.expression.name.pos - 1 - arrayName.length),
               idxCallBracketOpen + 1, // consume (
-              `pushArray(${arrayName},` // no trailing whitespace. let eslint fix formatting
+              `${pushArrayFuncName}(${arrayName},` // no trailing whitespace. let eslint fix formatting
             );
 
             // patch arguments of pushArray()
@@ -335,7 +366,7 @@ async function patch_file(input_file, patchState = null, fileHistory = null) {
             code.overwrite(
               ts_node.expression.name.pos,
               (idxCallBracketOpen + 1),
-              "pushArray("
+              `${pushArrayFuncName}(`
             );
 
             // patch arguments of .pushArray()
@@ -489,7 +520,7 @@ async function patch_file(input_file, patchState = null, fileHistory = null) {
           code.overwrite(
             node.callee.object.start,
             (pushProp.end + 1),
-            `pushArray(${arrayName},` // no trailing whitespace. let eslint fix formatting
+            `${pushArrayFuncName}(${arrayName},` // no trailing whitespace. let eslint fix formatting
           );
 
           // patch arguments of pushArray()
@@ -511,7 +542,7 @@ async function patch_file(input_file, patchState = null, fileHistory = null) {
 
         if (replaceMethod == "pushArray") {
           // ".push" --> ".pushArray"
-          code.overwrite(pushProp.start, pushProp.end, "pushArray");
+          code.overwrite(pushProp.start, pushProp.end, pushArrayFuncName);
 
           // patch arguments of .pushArray()
           node.arguments.forEach(a => {
@@ -603,14 +634,23 @@ async function patch_file(input_file, patchState = null, fileHistory = null) {
     }
   }
 
+  // FIXME immediately handle errors from here.
+  // currently, the script will finish, and then throw errors
+  //throw 'TEST';
+
   if (replaceMethod == "pushArrayNoMethod") {
     // add implementation of array.pushArray
-    if (isTypeScript) {
-      code = code_pushArrayNoMethod_ts + '\n\n' + code;
-    }
-    else {
-      code = code_pushArrayNoMethod_js + '\n\n' + code;
-    }
+
+    // use relative import path to appease typescript
+    const libPath = `src/${pushArrayLibraryPathBase}`;
+    const input_dir = path.dirname(input_file);
+    const relPath = path.relative(input_dir, libPath);
+    
+    const code_pushArrayNoMethod = [
+      `import { ${pushArrayFuncName} } from '${relPath}';`,
+    ].map(line => line + '\n').join('');
+
+    code = code_pushArrayNoMethod + code;
   }
 
   // debug
@@ -670,6 +710,24 @@ glob("src/compiler/**/*.{ts,js}", {follow: true}, (error, files) => {
 
 }
 
+
+
+// add new files
+// required for the new build
+//for (const ext of ['ts', 'js']) {
+for (const ext of ['ts']) { // svelte needs only the *.ts file
+    fs.copyFileSync(`${file_pushArrayNoMethod_base}.${ext}`, `src/${pushArrayLibraryPathBase}.${ext}`)
+  patchedFileList.push(`src/${pushArrayLibraryPathBase}.${ext}`)
+  const pathInRepo = `${pushArrayLibraryPathBase}.${ext}`.split('/').slice(1).join('/'); // fix: path is outside repository
+  exec('src/svelte', `git add ${pathInRepo}`);
+}
+
+// add patched files
+exec('src/svelte', `git add src/compiler/**/*.ts`);
+//exec('src/svelte', `git add .eslintrc.js`); // only needed here
+
+
+
 // summary
 console.log(`\npatched files:\n${patchedFileList.join('\n')}`)
 
@@ -693,8 +751,8 @@ done >fix-push-array.patch
 
 
 // build svelte from patched sourcefiles
-exec('src/svelte', `npm run lint -- --fix`) // required. patching creates ugly syntax
-var runTests = true;
+//var runTests = true;
+var runTests = false; // save some time, assume tests are passing
 if (runTests) {
   // this ... is ... slow ... -> allow to skip
   // remove tests that need puppeteer
@@ -713,12 +771,50 @@ else {
 
 
 
+// NOTE svelte uses tabs for indent
+const eslintrc_patch = `\
+
+diff --git a/.eslintrc.js b/.eslintrc.js
+index a093de6..99f97a0 100644
+--- a/.eslintrc.js
++++ b/.eslintrc.js
+@@ -11,4 +11,11 @@ module.exports = {
+ 		],
+ 		'svelte3/compiler': require('./compiler')
+ 	}
++
++	// NOTE this is only used to fix the transform
++	,
++	rules: {
++		'comma-spacing': 'error'
++	}
++
+ };
+
+`;
+exec('src/svelte', 'patch -p1', {
+  input: eslintrc_patch,
+});
+
+
+
+// eslint requires a working compiler.js
+// src/svelte/.eslintrc.js: 'svelte3/compiler': require('./compiler')
+// so first we build, then we lint
+exec('src/svelte', `npm run lint -- --fix`) // required. patching creates ugly syntax
+
+
+
 // publish patch for svelte
 
-exec('src/svelte', 'git branch --delete --force fix-maximum-call-stack-size-exceeded', { allowFail: true });
-exec('src/svelte', 'git branch fix-maximum-call-stack-size-exceeded');
-exec('src/svelte', 'git switch fix-maximum-call-stack-size-exceeded');
+const branchTime = (new Date()).toLocaleString('af').replace(/[-:]/g, '').replace(/ /g, '-');
+
+//exec('src/svelte', 'git branch --delete --force fix-maximum-call-stack-size-exceeded', { allowFail: true });
+exec('src/svelte', `git branch fix-maximum-call-stack-size-exceeded-${branchTime}`);
+exec('src/svelte', `git switch fix-maximum-call-stack-size-exceeded-${branchTime}`);
 exec('src/svelte', 'git status');
+
+
 
 // allow manual postprocessing
 /*
@@ -734,12 +830,21 @@ cd src/svelte
 git status
 # edit files
 
-git commit -a -m "fix: Maximum call stack size exceeded (#4694)"
+git commit -m "[fix] Maximum call stack size exceeded (#4694)"
 git remote add fork https://milahu@github.com/milahu/svelte.git
-git push fork --force
+git push --force fork fix-maximum-call-stack-size-exceeded-${branchTime}:fix-maximum-call-stack-size-exceeded
 
-cp node_modules/.pnpm/code-red@0.2.2/node_modules/code-red/src/print/handlers.js ../code-red/src/print/handlers.js
 cd ../code-red
+cp ../svelte/node_modules/.pnpm/code-red@0.2.2/node_modules/code-red/src/print/handlers.js src/print/handlers.js
+# add whitespace after comma (eslint rule: comma-spacing)
+sed -i -E 's|${pushArrayFuncName}\(([^,]+),(.)|${pushArrayFuncName}(\\1, \\2|' src/print/handlers.js
+cp ../../push-array-no-method-svelte-module.js src/utils/push_array.js
+
+# TODO fix import path in src/print/handlers.js:
+# import { push_array } from '../utils/push_array';
+
+git add src/print/handlers.js src/utils/push_array.js
+
 # publish patch for code-red
 `)
 
