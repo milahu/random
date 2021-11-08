@@ -4,6 +4,8 @@ nix-shell -p gcc papi
 
 g++ -lpapi -DUSE_PAPI -std=c++0x -O3 bench-string-table-char-array.cpp -o bench-string-table-char-array
 
+./bench-string-table-char-array
+
 
 
 which is faster?
@@ -110,12 +112,12 @@ const char* String_showAsJson_replace_array__char_pointer_array[] = {
   "Z", "[", "\\\\", // 90 - 92
 };
 const std::uint8_t String_showAsJson_replace_array_length__char_pointer_array =
-  (std::uint8_t) sizeof(String_showAsJson_replace_array__char_pointer_array);
+  (std::uint8_t) (sizeof(String_showAsJson_replace_array__char_pointer_array) / sizeof(char*));
 
 void String_showAsJson__char_pointer_array(std::ostream & o, const std::string & s) {
   for (auto c = s.cbegin(); c != s.cend(); c++) {
-    //if ((std::uint8_t) *c < String_showAsJson_replace_array_length__char_pointer_array) // this is NOT 93, but 232
-    if ((std::uint8_t) *c <= 92)
+    if ((std::uint8_t) *c < String_showAsJson_replace_array_length__char_pointer_array)
+    //if ((std::uint8_t) *c <= 92)
       o << String_showAsJson_replace_array__char_pointer_array[(std::uint8_t) *c];
     else
       o << *c;
