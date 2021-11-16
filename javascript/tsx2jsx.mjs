@@ -1,6 +1,5 @@
 /*
 tsx2jsx.mjs
-... cos fuck typescript!
 
 npm i -D sucrase tiny-glob
 node tsx2jsx.mjs
@@ -62,14 +61,28 @@ if (gitDirty != '') {
 }
 
 // convert all files in src/ folder
+const todoTransform = [];
 for (const fi of await glob('./src/**/*.tsx')) {
   const fo = fi.slice(0, -4) + '.jsx';
-  console.log(`${fi} -> ${fo}`);
-  const i = fs.readFileSync(fi, 'utf8');
+  console.log(`rename: ${fi} -> ${fo}`);
+  spawnSync('git', ['mv', '-v', fi, fo]); // rename
+  todoTransform.push([fi, fo]);
+}
+spawnSync('git', ['commit', '-m', 'tsx2jsx: rename']); // commit
+
+for (const [fi, fo] of todoTransform) {
+  console.log(`transform: ${fi} -> ${fo}`);
+  const i = fs.readFileSync(fo, 'utf8');
   const o = transformTSOnly(i);
   // always do your backups :P
-  fs.writeFileSync(fi, o, 'utf8'); // replace input
-  spawnSync('git', ['mv', '-v', fi, fo]); // rename
+  fs.writeFileSync(fo, o, 'utf8'); // replace
   spawnSync('git', ['add', fo]); // add
 }
-spawnSync('git', ['commit', '-m', 'tsx2jsx']); // commit
+spawnSync('git', ['commit', '-m', 'tsx2jsx: transform']); // commit
+
+console.log(`
+next steps:
+
+git diff HEAD^  # inspect transform
+git reset --hard HEAD~2  # undo transform + rename
+`);
