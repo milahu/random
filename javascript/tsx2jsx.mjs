@@ -1,5 +1,6 @@
 /*
 tsx2jsx.mjs
+convert typescript to vanillajs (actual javascript)
 
 npm i -D sucrase tiny-glob
 node tsx2jsx.mjs
@@ -48,9 +49,13 @@ function transformTSOnly(code) {
     helperManager,
   };
 
-  const transformer = new RootTransformer(sucraseContext, ["typescript"], false, {
+  // https://github.com/alangpierce/sucrase#transforms
+  const sucraseOptions = {
     transforms: ["typescript"],
-  });
+    disableESTransforms: true, // keep modern javascript: Optional chaining, Nullish coalescing, ...
+  };
+
+  const transformer = new RootTransformer(sucraseContext, ["typescript"], false, sucraseOptions);
   return transformer.transform();
 }
 
@@ -60,9 +65,9 @@ if (gitDirty != '') {
   process.exit(1);
 }
 
-// convert all files in src/ folder
 const todoTransform = [];
-for (const fi of await glob('./src/**/*.tsx')) {
+//for (const fi of await glob('./src/**/*.tsx')) { // convert all files in src/ folder
+for (const fi of await glob('./**/*.tsx')) { // convert all files in workdir
   const fo = fi.slice(0, -4) + '.jsx';
   console.log(`rename: ${fi} -> ${fo}`);
   spawnSync('git', ['mv', '-v', fi, fo]); // rename
