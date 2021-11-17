@@ -6,6 +6,7 @@ npm i -D sucrase tiny-glob
 node tsx2jsx.mjs
 
 https://github.com/alangpierce/sucrase/issues/559
+https://github.com/milahu/random/blob/master/javascript/tsx2jsx.mjs
 */
 
 import fs from 'fs';
