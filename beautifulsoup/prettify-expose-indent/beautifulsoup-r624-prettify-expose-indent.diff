@@ -1,0 +1,153 @@
+=== modified file 'bs4/__init__.py'
+--- old/bs4/__init__.py	2021-11-30 03:13:33 +0000
++++ new/bs4/__init__.py	2021-12-14 13:56:38 +0000
+@@ -748,7 +748,9 @@
+        
+     def decode(self, pretty_print=False,
+                eventual_encoding=DEFAULT_OUTPUT_ENCODING,
+-               formatter="minimal"):
++               formatter="minimal",
++               indent_unit=" ",
++        ):
+         """Returns a string or Unicode representation of the parse tree
+             as an HTML or XML document.
+ 
+@@ -775,7 +777,7 @@
+         else:
+             indent_level = 0
+         return prefix + super(BeautifulSoup, self).decode(
+-            indent_level, eventual_encoding, formatter)
++            indent_level, eventual_encoding, formatter, indent_unit)
+ 
+ # Aliases to make it easier to get started quickly, e.g. 'from bs4 import _soup'
+ _s = BeautifulSoup
+
+=== modified file 'bs4/element.py'
+--- old/bs4/element.py	2021-11-30 03:13:33 +0000
++++ new/bs4/element.py	2021-12-14 13:51:25 +0000
+@@ -1608,7 +1608,9 @@
+ 
+     def encode(self, encoding=DEFAULT_OUTPUT_ENCODING,
+                indent_level=None, formatter="minimal",
+-               errors="xmlcharrefreplace"):
++               errors="xmlcharrefreplace",
++               indent_unit=' '
++        ):
+         """Render a bytestring representation of this PageElement and its
+         contents.
+ 
+@@ -1627,12 +1629,14 @@
+         """
+         # Turn the data structure into Unicode, then encode the
+         # Unicode.
+-        u = self.decode(indent_level, encoding, formatter)
++        u = self.decode(indent_level, encoding, formatter, indent_unit)
+         return u.encode(encoding, errors)
+ 
+     def decode(self, indent_level=None,
+                eventual_encoding=DEFAULT_OUTPUT_ENCODING,
+-               formatter="minimal"):
++               formatter="minimal",
++               indent_unit=' ',
++        ):
+         """Render a Unicode representation of this PageElement and its
+         contents.
+ 
+@@ -1691,14 +1695,14 @@
+         space = ''
+         indent_space = ''
+         if indent_level is not None:
+-            indent_space = (' ' * (indent_level - 1))
++            indent_space = (indent_unit * (indent_level - 1))
+         if pretty_print:
+             space = indent_space
+             indent_contents = indent_level + 1
+         else:
+             indent_contents = None
+         contents = self.decode_contents(
+-            indent_contents, eventual_encoding, formatter
++            indent_contents, eventual_encoding, formatter, indent_unit
+         )
+ 
+         if self.hidden:
+@@ -1745,7 +1749,7 @@
+             )
+         )
+ 
+-    def prettify(self, encoding=None, formatter="minimal"):
++    def prettify(self, encoding=None, formatter="minimal", indent=" "):
+         """Pretty-print this PageElement as a string.
+ 
+         :param encoding: The eventual encoding of the string. If this is None,
+@@ -1756,13 +1760,15 @@
+             (otherwise).
+         """
+         if encoding is None:
+-            return self.decode(True, formatter=formatter)
++            return self.decode(True, formatter=formatter, indent_unit=indent)
+         else:
+-            return self.encode(encoding, True, formatter=formatter)
++            return self.encode(encoding, True, formatter=formatter, indent_unit=indent)
+ 
+     def decode_contents(self, indent_level=None,
+                        eventual_encoding=DEFAULT_OUTPUT_ENCODING,
+-                       formatter="minimal"):
++                       formatter="minimal",
++                       indent_unit=' ',
++        ):
+         """Renders the contents of this tag as a Unicode string.
+ 
+         :param indent_level: Each line of the rendering will be
+@@ -1792,7 +1798,7 @@
+                 text = c.output_ready(formatter)
+             elif isinstance(c, Tag):
+                 s.append(c.decode(indent_level, eventual_encoding,
+-                                  formatter))
++                                  formatter, indent_unit))
+             preserve_whitespace = (
+                 self.preserve_whitespace_tags and self.name in self.preserve_whitespace_tags
+             )
+@@ -1800,7 +1806,7 @@
+                 text = text.strip()
+             if text:
+                 if pretty_print and not preserve_whitespace:
+-                    s.append(" " * (indent_level - 1))
++                    s.append(indent_unit * (indent_level - 1))
+                 s.append(text)
+                 if pretty_print and not preserve_whitespace:
+                     s.append("\n")
+@@ -1808,7 +1814,9 @@
+        
+     def encode_contents(
+         self, indent_level=None, encoding=DEFAULT_OUTPUT_ENCODING,
+-        formatter="minimal"):
++        formatter="minimal",
++        indent_unit=' ',
++        ):
+         """Renders the contents of this PageElement as a bytestring.
+ 
+         :param indent_level: Each line of the rendering will be
+@@ -1822,17 +1830,19 @@
+ 
+         :return: A bytestring.
+         """
+-        contents = self.decode_contents(indent_level, encoding, formatter)
++        contents = self.decode_contents(indent_level, encoding, formatter, indent_unit)
+         return contents.encode(encoding)
+ 
+     # Old method for BS3 compatibility
+     def renderContents(self, encoding=DEFAULT_OUTPUT_ENCODING,
+-                       prettyPrint=False, indentLevel=0):
++                       prettyPrint=False, indentLevel=0,
++                       indentUnit=' '
++        ):
+         """Deprecated method for BS3 compatibility."""
+         if not prettyPrint:
+             indentLevel = None
+         return self.encode_contents(
+-            indent_level=indentLevel, encoding=encoding)
++            indent_level=indentLevel, encoding=encoding, indent_unit=indentUnit)
+ 
+     #Soup methods
+ 
+
