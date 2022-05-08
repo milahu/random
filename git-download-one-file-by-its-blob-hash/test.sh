@@ -17,6 +17,25 @@
 # https://docs.gitlab.com/ee/api/repositories.html#raw-blob-content
 # GET /projects/:id/repository/blobs/:sha/raw
 
+echo get blobHash from filePath
+filePath="repository/com/sun/tools/8.0/tools-8.0.jar"
+ref="master" # TODO urlencode branch names
+owner=Col-E
+repo=jdk-tools-mirror
+blobHash=$(set -x; curl -s "https://api.github.com/repos/$owner/$repo/contents/$filePath?ref=$ref" | jq -r .sha)
+echo "blobHash = $blobHash"
+
+echo download file by blobHash
+# note: blobs are anonymous = have no filename
+fileName="$(basename "$filePath")"
+if [ -e "$fileName" ]; then
+  echo skip: curl -L -o "$fileName" -H "Accept: application/vnd.github.v3.raw" https://api.github.com/repos/$owner/$repo/git/blobs/$blobHash
+else
+  ( set -x; curl -L -o "$fileName" -H "Accept: application/vnd.github.v3.raw" https://api.github.com/repos/$owner/$repo/git/blobs/$blobHash )
+fi
+
+exit 0
+
 echo github small file
 
 commitHash=6ed65d9b5f5f40af285edb73577d2ec690d40237
