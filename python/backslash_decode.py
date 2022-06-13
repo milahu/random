@@ -1,5 +1,7 @@
 # https://stackoverflow.com/questions/1885181/how-to-un-escape-a-backslash-escaped-string
 
+# custom string parser to decode only some backslash-escapes, in this case \" and \'
+
 def backslash_decode(src):
     "decode backslash-escapes"
     slashes = 0 # count backslashes
