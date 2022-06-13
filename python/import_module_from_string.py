@@ -24,11 +24,11 @@
 
 import sys, importlib.util
 
-def import_from_string(name: str, source: str):
+def import_module_from_string(name: str, source: str):
   """
   Import module from source string.
   Example use:
-  import_from_string("m", "f = lambda: print('hello')")
+  import_module_from_string("m", "f = lambda: print('hello')")
   m.f()
   """
   spec = importlib.util.spec_from_loader(name, loader=None)
@@ -41,7 +41,7 @@ def import_from_string(name: str, source: str):
 # demo
 
 # note: "if True:" allows to indent the source string
-import_from_string('hello_module', '''if True:
+import_module_from_string('hello_module', '''if True:
   def hello():
     print('hello')
 ''')
