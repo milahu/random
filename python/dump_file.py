@@ -4,4 +4,4 @@ def dump_file(file):
     "print file contents with line numbers"
     with open(file, "r") as fh:
         for num, line in enumerate(fh, start=1):
-            print(f"{file}:{num} {line}", end="")
+            print(f"{file}:{num}: {line}", end="")
