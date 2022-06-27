@@ -8,6 +8,10 @@
 
 # full example based on the answer by ZF007
 
+# see also
+# billiard.Pool.grow and billiard.Pool.shrink
+# https://github.com/celery/billiard/blob/ff8efc5d689ef048f5203593390f1ff6a052a5d5/billiard/pool.py#L1297
+
 import multiprocessing, time, random
 
 def worker_function(job_id):
