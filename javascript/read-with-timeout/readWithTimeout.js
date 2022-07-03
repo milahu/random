@@ -5,6 +5,9 @@ const fs = require('fs');
 
 /**
 * read with timeout. unix only
+*
+* https://stackoverflow.com/questions/20808126/how-to-timeout-an-fs-read-in-node-js
+*
 * @param {number | string} fdOrPath
 * @param {number} blockSize
 * @param {number} timeout
