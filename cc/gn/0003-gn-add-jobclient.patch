@@ -1,0 +1,282 @@
+From cfd34062b51191a2f0b01bb2250bdd8032554abd Mon Sep 17 00:00:00 2001
+From: Milan Hauth <milahu@gmail.com>
+Date: Thu, 30 Jun 2022 15:08:48 +0200
+Subject: [PATCH 3/5] gn: add jobclient
+
+---
+ src/3rdparty/gn/build/gen.py             |  8 ++
+ src/3rdparty/gn/src/gn/command_args.cc   |  6 +-
+ src/3rdparty/gn/src/gn/command_gen.cc    |  6 +-
+ src/3rdparty/gn/src/gn/header_checker.cc |  4 +
+ src/3rdparty/gn/src/gn/scheduler.cc      |  3 +
+ src/3rdparty/gn/src/util/worker_pool.cc  | 96 +++++++++++++++++++++++-
+ src/3rdparty/gn/src/util/worker_pool.h   | 10 +++
+ 7 files changed, 127 insertions(+), 6 deletions(-)
+
+diff --git a/src/3rdparty/gn/build/gen.py b/src/3rdparty/gn/build/gen.py
+index 15a177a25..83f8a13b6 100755
+--- a/src/3rdparty/gn/build/gen.py
++++ b/src/3rdparty/gn/build/gen.py
+@@ -687,9 +687,17 @@ def WriteGNNinja(path, platform, host, options):
+         'src/util/sys_info.cc',
+         'src/util/ticks.cc',
+         'src/util/worker_pool.cc',
++        # https://github.com/stefanb2/ninja/blob/topic-tokenpool-master/src/tokenpool-gnu-make.cc
++        # https://github.com/milahu/gnumake-tokenpool/blob/main/cc/src/tokenpool-gnu-make.cc
++        'src/util/tokenpool-gnu-make.cc',
+       ]},
+   }
+ 
++  if platform.is_windows():
++    static_libraries['gn_lib']['sources'].append('src/util/tokenpool-gnu-make-win32.cc')
++  else:
++    static_libraries['gn_lib']['sources'].append('src/util/tokenpool-gnu-make-posix.cc')
++
+   executables = {
+       'gn': {'sources': [ 'src/gn/gn_main.cc' ], 'libs': []},
+ 
+diff --git a/src/3rdparty/gn/src/gn/command_args.cc b/src/3rdparty/gn/src/gn/command_args.cc
+index 2689f882e..475da3426 100644
+--- a/src/3rdparty/gn/src/gn/command_args.cc
++++ b/src/3rdparty/gn/src/gn/command_args.cc
+@@ -401,7 +401,7 @@ int EditArgsFile(const std::string& build_dir) {
+   std::vector<std::string> gen_commands;
+   gen_commands.push_back(build_dir);
+   return RunGen(gen_commands);
+-}
++} // int EditArgsFile(const std::string& build_dir)
+ 
+ }  // namespace
+ 
+@@ -506,6 +506,8 @@ int RunArgs(const std::vector<std::string>& args) {
+   if (base::CommandLine::ForCurrentProcess()->HasSwitch(kSwitchList))
+     return ListArgs(args[0]);
+   return EditArgsFile(args[0]);
+-}
++} // int RunArgs(const std::vector<std::string>& args)
++
++// TODO where is RunArgs called??
+ 
+ }  // namespace commands
+diff --git a/src/3rdparty/gn/src/gn/command_gen.cc b/src/3rdparty/gn/src/gn/command_gen.cc
+index e5248b9f4..cebb6fa92 100644
+--- a/src/3rdparty/gn/src/gn/command_gen.cc
++++ b/src/3rdparty/gn/src/gn/command_gen.cc
+@@ -689,7 +689,11 @@ int RunGen(const std::vector<std::string>& args) {
+     OutputString(stats);
+   }
+ 
++  // FIXME release tokens to jobserver
++
+   return 0;
+-}
++} // int RunGen(const std::vector<std::string>& args)
++// called from
++// gn/src/gn/command_args.cc  EditArgsFile
+ 
+ }  // namespace commands
+diff --git a/src/3rdparty/gn/src/gn/header_checker.cc b/src/3rdparty/gn/src/gn/header_checker.cc
+index 212f5816d..8783dc659 100644
+--- a/src/3rdparty/gn/src/gn/header_checker.cc
++++ b/src/3rdparty/gn/src/gn/header_checker.cc
+@@ -185,6 +185,10 @@ void HeaderChecker::RunCheckOverFiles(const FileMap& files, bool force_check) {
+   std::unique_lock<std::mutex> auto_lock(lock_);
+   while (!task_count_.IsZero())
+     task_count_cv_.wait(auto_lock);
++
++  //delete pool; // error: type 'class WorkerPool' argument given to 'delete', expected pointer
++  printf("gn: HeaderChecker::RunCheckOverFiles: done tasks. calling pool.ClearTokens\n");
++  pool.ClearTokens();
+ }
+ 
+ void HeaderChecker::DoWork(const Target* target, const SourceFile& file) {
+diff --git a/src/3rdparty/gn/src/gn/scheduler.cc b/src/3rdparty/gn/src/gn/scheduler.cc
+index 6525f33ec..00f8e4cce 100644
+--- a/src/3rdparty/gn/src/gn/scheduler.cc
++++ b/src/3rdparty/gn/src/gn/scheduler.cc
+@@ -21,6 +21,7 @@ Scheduler::Scheduler()
+ 
+ Scheduler::~Scheduler() {
+   WaitForPoolTasks();
++  //delete worker_pool_;
+   g_scheduler = nullptr;
+ }
+ 
+@@ -35,6 +36,8 @@ bool Scheduler::Run() {
+   // Don't do this while holding |lock_|, since it will block on the workers,
+   // which may be in turn waiting on the lock.
+   WaitForPoolTasks();
++  printf("gn: Scheduler::Run: done tasks. calling worker_pool_.ClearTokens\n");
++  worker_pool_.ClearTokens();
+   return !local_is_failed;
+ }
+ 
+diff --git a/src/3rdparty/gn/src/util/worker_pool.cc b/src/3rdparty/gn/src/util/worker_pool.cc
+index 9f6a47b38..4356a98de 100644
+--- a/src/3rdparty/gn/src/util/worker_pool.cc
++++ b/src/3rdparty/gn/src/util/worker_pool.cc
+@@ -85,13 +85,23 @@ int GetThreadCount() {
+ 
+ WorkerPool::WorkerPool() : WorkerPool(GetThreadCount()) {}
+ 
+-WorkerPool::WorkerPool(size_t thread_count) : should_stop_processing_(false) {
++WorkerPool::WorkerPool(size_t max_thread_count_)
++  : should_stop_processing_(false)
++  , max_thread_count_(max_thread_count_)
++  , thread_count_(max_thread_count_)
++{
+ #if defined(OS_WIN)
+   ProcessorGroupSetter processor_group_setter;
+ #endif
+ 
+-  threads_.reserve(thread_count);
+-  for (size_t i = 0; i < thread_count; ++i) {
++  WorkerPool::InitTokenPool();
++  WorkerPool::GrowPool();
++  // TODO later: try to grow pool = add more threads
++  // TODO later: release all tokens
++
++  // TODO move to GrowPool
++  threads_.reserve(thread_count_);
++  for (size_t i = 0; i < thread_count_; ++i) {
+     threads_.emplace_back([this]() { Worker(); });
+ 
+ #if defined(OS_WIN)
+@@ -105,19 +115,99 @@ WorkerPool::WorkerPool(size_t thread_count) : should_stop_processing_(false) {
+ }
+ 
+ WorkerPool::~WorkerPool() {
++  printf("gn WorkerPool::~WorkerPool\n"); // not reached??
+   {
+     std::unique_lock<std::mutex> queue_lock(queue_mutex_);
+     should_stop_processing_ = true;
+   }
+ 
++  // not reached??
++  printf("gn WorkerPool::~WorkerPool: pool_notifier_.notify_all\n");
+   pool_notifier_.notify_all();
+ 
++  printf("gn WorkerPool::~WorkerPool: task_thread.join ...\n");
++  int token;
+   for (auto& task_thread : threads_) {
+     task_thread.join();
++    // release tokens one by one
++    if (tokens_.size() > 0) {
++      printf("gn WorkerPool::~WorkerPool: releasing token\n");
++      token = tokens_.back();
++      tokenpool_->ReleaseToken(token);
++      tokens_.pop_back();
++    }
++  }
++
++  /*
++    gn: jobclient: init ok. max_thread_count_ = 63
++    gn: jobclient: acquired 32 tokens -> thread_count = 33
++    Done. Made 17041 targets from 2605 files in 4974ms            // command_gen.cc
++  */
++
++  // FIXME this is never reached?
++
++  WorkerPool::ClearTokens();
++
++  if (tokenpool_ != NULL) {
++    delete tokenpool_;
++    tokenpool_ = NULL;
++  }
++}
++
++void WorkerPool::InitTokenPool() {
++  // dynamic pool size with gnumake jobclient
++  bool ignore_jobserver = false;
++  bool verbose_jobclient = true;
++  double load_avg_ = 0.0; // mutable. not used
++
++  tokenpool_ = TokenPool::Get();
++
++  if (!tokenpool_->SetupClient(ignore_jobserver, verbose_jobclient, load_avg_)) {
++    delete tokenpool_;
++    tokenpool_ = NULL;
++    printf("gn WorkerPool::InitTokenPool: init failed. jobserver off?\n");
++    return;
++  }
++  printf("gn WorkerPool::InitTokenPool: init ok. max_thread_count_ = %li\n", max_thread_count_);
++
++  thread_count_ = 1; // start small
++}
++
++void WorkerPool::GrowPool() {
++  if (tokenpool_ == NULL) return;
++  //printf("gn: jobclient: growing pool from %li to max %li\n", thread_count_, max_thread_count_);
++  int token;
++  bool done_grow = false;
++  while (thread_count_ < max_thread_count_) {
++    token = tokenpool_->AcquireToken();
++    if (token < 0) break; // jobserver is full, try again later
++    tokens_.push_back(token);
++    thread_count_++;
++    done_grow = true;
++  }
++  if (done_grow) {
++    printf("gn WorkerPool::GrowPool: acquired %li tokens -> thread_count = %li\n", tokens_.size(), thread_count_);
++  }
++}
++
++void WorkerPool::ClearTokens() {
++  if (tokenpool_ == NULL) return;
++  // release tokens back to jobserver
++  // FIXME this is never reached?
++  printf("gn WorkerPool::ClearTokens: releasing %li tokens\n", tokens_.size());
++  int token;
++  while (tokens_.size() > 0) {
++    token = tokens_.back();
++    tokenpool_->ReleaseToken(token);
++    tokens_.pop_back();
+   }
++  printf("gn WorkerPool::ClearTokens: released all tokens\n");
+ }
+ 
+ void WorkerPool::PostTask(std::function<void()> work) {
++  // GrowPool has no effect on thread count
++  // TODO in GrowPool, also increase thread count
++  //WorkerPool::GrowPool();
+   {
+     std::unique_lock<std::mutex> queue_lock(queue_mutex_);
+     CHECK(!should_stop_processing_);
+diff --git a/src/3rdparty/gn/src/util/worker_pool.h b/src/3rdparty/gn/src/util/worker_pool.h
+index 7284ebe72..cc529e4e4 100644
+--- a/src/3rdparty/gn/src/util/worker_pool.h
++++ b/src/3rdparty/gn/src/util/worker_pool.h
+@@ -14,6 +14,8 @@
+ #include "base/logging.h"
+ #include "base/macros.h"
+ 
++#include "tokenpool.h"
++
+ class WorkerPool {
+  public:
+   WorkerPool();
+@@ -21,6 +23,7 @@ class WorkerPool {
+   ~WorkerPool();
+ 
+   void PostTask(std::function<void()> work);
++  void ClearTokens();
+ 
+  private:
+   void Worker();
+@@ -31,6 +34,13 @@ class WorkerPool {
+   std::condition_variable_any pool_notifier_;
+   bool should_stop_processing_;
+ 
++  void InitTokenPool();
++  void GrowPool();
++  TokenPool* tokenpool_;
++  std::vector<int> tokens_;
++  size_t max_thread_count_;
++  size_t thread_count_;
++
+   DISALLOW_COPY_AND_ASSIGN(WorkerPool);
+ };
+ 
+-- 
+2.36.1
+
