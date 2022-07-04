@@ -1,0 +1,24 @@
+From 61c92c75fa67c7961ba27ac4705e7a8b861d3632 Mon Sep 17 00:00:00 2001
+From: Milan Hauth <milahu@gmail.com>
+Date: Wed, 29 Jun 2022 15:38:12 +0200
+Subject: [PATCH 2/5] build_inspector_overlay.py: fix inherit fds
+
+---
+ .../src/scripts/build/build_inspector_overlay.py                 | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/3rdparty/chromium/third_party/devtools-frontend/src/scripts/build/build_inspector_overlay.py b/src/3rdparty/chromium/third_party/devtools-frontend/src/scripts/build/build_inspector_overlay.py
+index d1ac10934..d275f0988 100644
+--- a/src/3rdparty/chromium/third_party/devtools-frontend/src/scripts/build/build_inspector_overlay.py
++++ b/src/3rdparty/chromium/third_party/devtools-frontend/src/scripts/build/build_inspector_overlay.py
+@@ -45,6 +45,7 @@ def rollup(input_path, output_path, filename, max_size, rollup_plugin):
+         ['--plugin', rollup_plugin, '--plugin', 'terser'],
+         stdout=subprocess.PIPE,
+         stderr=subprocess.PIPE,
++        close_fds=False, # inherit fds of parent process for gnumake jobclient
+         universal_newlines=True,
+         encoding='utf-8')
+     out, error = rollup_process.communicate()
+-- 
+2.36.1
+
