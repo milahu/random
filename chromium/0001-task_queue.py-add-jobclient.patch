@@ -1,0 +1,129 @@
+From e3b6450235cbec71ce3cf332922c14b4e688f474 Mon Sep 17 00:00:00 2001
+From: Milan Hauth <milahu@gmail.com>
+Date: Mon, 27 Jun 2022 20:40:59 +0200
+Subject: [PATCH 1/5] task_queue.py: add jobclient
+
+---
+ .../bindings/scripts/bind_gen/task_queue.py   | 53 ++++++++++++++++++-
+ 1 file changed, 52 insertions(+), 1 deletion(-)
+
+diff --git a/src/3rdparty/chromium/third_party/blink/renderer/bindings/scripts/bind_gen/task_queue.py b/src/3rdparty/chromium/third_party/blink/renderer/bindings/scripts/bind_gen/task_queue.py
+index e06b401b0..430720a41 100644
+--- a/src/3rdparty/chromium/third_party/blink/renderer/bindings/scripts/bind_gen/task_queue.py
++++ b/src/3rdparty/chromium/third_party/blink/renderer/bindings/scripts/bind_gen/task_queue.py
+@@ -7,12 +7,23 @@ import multiprocessing
+ import sys
+ 
+ from .package_initializer import package_initializer
++from . import gnumake_tokenpool
+ 
+ 
+ class TaskQueue(object):
+     """
+     Represents a task queue to run tasks with using a worker pool.  Scheduled
+     tasks will be executed in parallel.
++
++    q = TaskQueue()
++    f = lambda x: x*x
++    for i in range(0, 10):
++        q.post_task(f, (i,))
++    q.run()
++    # note: return values are not stored
++
++    called from
++    blink/renderer/bindings/scripts/generate_bindings.py
+     """
+ 
+     def __init__(self, single_process=False):
+@@ -25,11 +36,18 @@ class TaskQueue(object):
+         assert isinstance(single_process, bool)
+         if single_process:
+             self._single_process = True
++            # TODO rename to _init_pool_size. current pool size is self._pool._processes
+             self._pool_size = 1
+             self._pool = None
+         else:
+             self._single_process = False
+             self._pool_size = multiprocessing.cpu_count()
++            self._jobclient = None
++            try:
++                self._jobclient = gnumake_tokenpool.JobClient()
++                self._pool_size = 1 # start small, grow on demand
++            except gnumake_tokenpool.NoJobServer:
++                pass
+             if sys.platform == 'win32':
+                 # TODO(crbug.com/1190269) - we can't use more than 56
+                 # cores on Windows or Python3 may hang.
+@@ -38,8 +56,35 @@ class TaskQueue(object):
+                                               package_initializer().init)
+         self._requested_tasks = []  # List of (func, args, kwargs)
+         self._worker_tasks = []  # List of multiprocessing.pool.AsyncResult
++        self._worker_tokens = [] # List of int
+         self._did_run = False
+ 
++    def _grow_pool(self):
++        # NOTE this is not optimal (underloading)
++        # TODO delta = remaining_tasks - self._pool._processes
++        delta = len(self._requested_tasks) - self._pool._processes
++        if delta <= 0:
++            return
++        new_tokens = []
++        for i in range(delta):
++            token = self._jobclient.acquire()
++            if token == None:
++                break
++            new_tokens.append(token)
++        if len(new_tokens) == 0:
++            return
++        self._worker_tokens += new_tokens
++        new_size = 1 + len(self._worker_tokens)
++        #print(f"growing pool from {self._pool._processes} to {new_size}") # debug
++        self._pool._processes = new_size
++        self._pool._repopulate_pool()
++
++    def _release_tokens(self):
++        # NOTE this is not optimal (underloading).
++        # tokens should be released when workers become idle.
++        for token in self._worker_tokens:
++            self._jobclient.release(token)
++
+     def post_task(self, func, *args, **kwargs):
+         """
+         Schedules a new task to be executed when |run| method is invoked.  This
+@@ -70,7 +115,7 @@ class TaskQueue(object):
+         for index, task in enumerate(self._requested_tasks):
+             func, args, kwargs = task
+             report_progress(len(self._requested_tasks), index)
+-            func(*args, **kwargs)
++            func(*args, **kwargs) # note: return values are not stored
+         report_progress(len(self._requested_tasks), len(self._requested_tasks))
+ 
+     def _run_in_parallel(self, report_progress):
+@@ -78,6 +123,9 @@ class TaskQueue(object):
+             func, args, kwargs = task
+             self._worker_tasks.append(
+                 self._pool.apply_async(func, args, kwargs))
++
++        # this is non-blocking
++        # Prevents any more tasks from being submitted to the pool.
+         self._pool.close()
+ 
+         def report_worker_task_progress():
+@@ -91,6 +139,7 @@ class TaskQueue(object):
+         timeout_in_sec = 1
+         while True:
+             report_worker_task_progress()
++            self._grow_pool()
+             for worker_task in self._worker_tasks:
+                 if not worker_task.ready():
+                     worker_task.wait(timeout_in_sec)
+@@ -101,4 +150,6 @@ class TaskQueue(object):
+             else:
+                 break
+ 
++        # this is blocking. wait for all jobs to complete
+         self._pool.join()
++        self._release_tokens()
+-- 
+2.36.1
+
