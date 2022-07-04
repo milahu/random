@@ -1,0 +1,95 @@
+From 6dfff6549e0253af78f0b54b3d98ce6ba25e641b Mon Sep 17 00:00:00 2001
+From: Milan Hauth <milahu@gmail.com>
+Date: Tue, 28 Jun 2022 14:33:49 +0200
+Subject: [PATCH 4/5] node.py: add debug
+
+---
+ .../chromium/third_party/node/node.py         | 62 +++++++++++++++----
+ 1 file changed, 51 insertions(+), 11 deletions(-)
+
+diff --git a/src/3rdparty/chromium/third_party/node/node.py b/src/3rdparty/chromium/third_party/node/node.py
+index aafd41992..ff6a99933 100755
+--- a/src/3rdparty/chromium/third_party/node/node.py
++++ b/src/3rdparty/chromium/third_party/node/node.py
+@@ -8,6 +8,9 @@ import platform
+ import subprocess
+ import sys
+ import os
++import shlex
++import io
++from datetime import datetime
+ 
+ def which(cmd):
+     pathenv = os.getenv('PATH')
+@@ -43,20 +46,57 @@ def GetBinaryPath():
+   }[platform.system()])
+ 
+ 
+-def RunNode(cmd_parts, stdout=None):
++def RunNode(cmd_parts, stdout=None) -> str or bytes:
++  is_debug = bool(os.environ.get('DEBUG_CHROMIUM_NODE_PY'))
++  if is_debug:
++    name = os.path.basename(cmd_parts[0])
++    if name == "rollup":
++      cmd_parts = list(filter(lambda s: s != "--silent", cmd_parts)) # debug rollup
++
+   cmd = [GetBinaryPath()] + cmd_parts
+-  process = subprocess.Popen(
+-      cmd, cwd=os.getcwd(), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+-      universal_newlines=True)
+-  stdout, stderr = process.communicate()
++  #cmd = ['node'] + cmd_parts # debug
+ 
+-  if process.returncode != 0:
+-    # Handle cases where stderr is empty, even though the command failed, for
+-    # example https://github.com/microsoft/TypeScript/issues/615
+-    err = stderr if len(stderr) > 0 else stdout
+-    raise RuntimeError('Command \'%s\' failed\n%s' % (' '.join(cmd), err))
++  options = {
++    'cwd': os.getcwd(),
++    #'universal_newlines': True, # -> text=True
++    #'text': False, # default
++    'close_fds': False, # inherit fds of parent process for gnumake jobclient
++    'stdout': subprocess.PIPE,
++    'stderr': subprocess.STDOUT,
++  }
++
++  if is_debug:
++    print(f"debug node.py {os.getpid()} {datetime.utcnow().strftime('%F %T.%f')[:-3]}: Running command: {shlex.join(cmd)}", file=sys.stderr)
+ 
+-  return stdout
++  process = subprocess.Popen(cmd, **options)
++
++  if is_debug:
++    print(f"debug node.py {os.getpid()} {datetime.utcnow().strftime('%F %T.%f')[:-3]}: Child PID: {process.pid}", file=sys.stderr)
++
++  output = None
++  if is_debug: # print + capture output https://stackoverflow.com/questions/18421757
++    # note: we need live output to debug deadloops
++    # note: ninja is buffering output of commands, so flushing here is a noop
++    # todo: how to disable ninja buffering to get live output?
++    output = io.BytesIO()
++    for line in iter(process.stdout.readline, b''):
++      line_prefix = b'debug node.py %i %s:   ' % (os.getpid(), datetime.utcnow().strftime('%F %T.%f')[:-3])
++      sys.stderr.buffer.write(line_prefix + line)
++      output.write(line)
++    output = output.getvalue()
++    process.wait() # set process.returncode
++  else: # capture output, dont print
++    output, _stderr = process.communicate()
++  try:
++    output = output.decode('utf8')
++  except UnicodeDecodeError:
++    pass # type(output) == bytes
++  if process.returncode != 0:
++    raise RuntimeError('Command failed with status %i: %s\n%s' % (process.returncode, shlex.join(cmd), output))
++  if is_debug:
++    print(f"debug node.py {os.getpid()} {datetime.utcnow().strftime('%F %T.%f')[:-3]}: Command succeeded: {shlex.join(cmd)}", file=sys.stderr)
++  return output
+ 
+ if __name__ == '__main__':
++  # note: output is not printed
+   RunNode(sys.argv[1:])
+-- 
+2.36.1
+

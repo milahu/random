@@ -1,0 +1,121 @@
+From e05d083bfe921a0e2ba23428fc8cdca8c9d0ef16 Mon Sep 17 00:00:00 2001
+From: Milan Hauth <milahu@gmail.com>
+Date: Wed, 29 Jun 2022 16:07:05 +0200
+Subject: [PATCH 5/5] mojom_parser.py: add jobclient
+
+---
+ .../mojo/public/tools/mojom/mojom_parser.py   | 71 +++++++++++++++++++
+ 1 file changed, 71 insertions(+)
+
+diff --git a/src/3rdparty/chromium/mojo/public/tools/mojom/mojom_parser.py b/src/3rdparty/chromium/mojo/public/tools/mojom/mojom_parser.py
+index 74beb077d..096aba4c3 100755
+--- a/src/3rdparty/chromium/mojo/public/tools/mojom/mojom_parser.py
++++ b/src/3rdparty/chromium/mojo/public/tools/mojom/mojom_parser.py
+@@ -28,6 +28,8 @@ from mojom.generate import translate
+ from mojom.parse import parser
+ from mojom.parse import conditional_features
+ 
++import gnumake_tokenpool # https://github.com/milahu/gnumake-tokenpool/tree/main/py
++
+ 
+ # Disable this for easier debugging.
+ # In Python 2, subprocesses just hang when exceptions are thrown :(.
+@@ -220,6 +222,52 @@ class _FuncWrapper:
+       return _ExceptionWrapper()
+ 
+ 
++
++def _debug_on(*a, **k):
++  k['file'] = sys.stderr
++  print("mojom_parser.py:", *a, **k)
++
++def _debug_off(*a, **k):
++  pass
++
++debug = _debug_on if os.environ.get('DEBUG_MOJOM_PARSER') else _debug_off
++
++
++
++def _grow_pool(pool, new_size, jobclient, worker_tokens):
++  delta = new_size - pool._processes
++  debug(f"grow pool: delta = {delta}")
++  if delta <= 0:
++    return
++  debug(f"trying to grow pool by {delta}") # debug
++  new_tokens = []
++  for i in range(delta):
++    debug(f"grow pool: jobclient.acquire ...")
++    token = jobclient.acquire()
++    debug(f"grow pool: jobclient.acquire ok")
++    if token == None:
++      break
++    new_tokens.append(token)
++  if len(new_tokens) == 0:
++    return
++  debug(f"aquired {len(new_tokens)} tokens") # debug
++  for token in new_tokens:
++    worker_tokens.append(token)
++  new_size = 1 + len(worker_tokens)
++  debug(f"growing pool from {pool._processes} to {new_size}") # debug
++  pool._processes = new_size
++  pool._repopulate_pool()
++
++def _release_tokens(jobclient, worker_tokens):
++  # NOTE this is not optimal (underloading).
++  # tokens should be released when workers become idle.
++  debug(f"releasing {len(worker_tokens)} tokens") # debug
++  for token in worker_tokens:
++    debug(f"jobclient.release ...")
++    jobclient.release(token)
++    debug(f"jobclient.release ok")
++
++
+ def _Shard(target_func, arg_list, processes=None):
+   arg_list = list(arg_list)
+   if processes is None:
+@@ -238,7 +286,25 @@ def _Shard(target_func, arg_list, processes=None):
+       yield target_func(*arg_tuple)
+     return
+ 
++  jobclient = None
++  max_processes = None
++  worker_tokens = [] # List of int
++  debug(f"jobclient init ...")
++  try:
++    jobclient = gnumake_tokenpool.JobClient()
++    debug(f"jobclient init ok")
++    max_processes = processes
++    processes = 1 # start small, grow on demand
++  except gnumake_tokenpool.NoJobServer:
++    pass
++
+   pool = multiprocessing.Pool(processes=processes)
++
++  if jobclient:
++    debug(f"grow pool ...")
++    _grow_pool(pool, max_processes, jobclient, worker_tokens)
++    debug(f"grow pool ok")
++
+   try:
+     wrapped_func = _FuncWrapper(target_func)
+     for result in pool.imap_unordered(wrapped_func, arg_list):
+@@ -246,11 +312,16 @@ def _Shard(target_func, arg_list, processes=None):
+         sys.stderr.write(result.formatted_trace)
+         sys.exit(1)
+       yield result
++      if jobclient:
++        _grow_pool(pool, max_processes, jobclient, worker_tokens)
+   finally:
+     pool.close()
++
+     pool.join()  # Needed on Windows to avoid WindowsError during terminate.
+     pool.terminate()
+ 
++    if jobclient:
++      _release_tokens(jobclient, worker_tokens)
+ 
+ def _ParseMojoms(mojom_files,
+                  input_root_paths,
+-- 
+2.36.1
+
