@@ -73,16 +73,11 @@ class MainClass
     MainClass()
       : s("a\nb\n")
     {
-      char buffer[100];
-      int cx;
-
+      char line_prefix[100];
       pid_t pid = getpid();
+      assert(snprintf(line_prefix, 100, "process %d: ", pid) < 100);
 
-      cx = snprintf(buffer, 100, "process %d: ", pid);
-      assert(0 < cx);
-      assert(cx < 100);
-
-      oprefixstream_ = new oprefixstream(buffer, std::cout);
+      oprefixstream_ = new oprefixstream(line_prefix, std::cout);
     }
     void Print() {
       *oprefixstream_ << s;
