@@ -37,7 +37,7 @@ class prefixbuf
         if (c != std::char_traits<char>::eof()) {
             if (this->need_prefix
                 && !this->prefix.empty()
-                && this->prefix.size() != this->sbuf->sputn(&this->prefix[0], this->prefix.size())) {
+                && this->prefix.size() != (long unsigned int) this->sbuf->sputn(&this->prefix[0], this->prefix.size())) {
                 return std::char_traits<char>::eof();
             }
             this->need_prefix = c == '\n';
