@@ -74,6 +74,10 @@ for (const fi of await glob('./**/*.tsx')) { // convert all files in workdir
   spawnSync('git', ['mv', '-v', fi, fo]); // rename
   todoTransform.push([fi, fo]);
 }
+if (todoTransform.length == 0) {
+  console.log(`not found any *.tsx files`);
+  process.exit(1);
+}
 spawnSync('git', ['commit', '-m', 'tsx2jsx: rename']); // commit
 
 for (const [fi, fo] of todoTransform) {
