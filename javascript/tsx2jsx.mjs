@@ -60,16 +60,43 @@ function transformTSOnly(code) {
   return transformer.transform();
 }
 
-const gitDirty = spawnSync('git', ['diff-index', 'HEAD', '--'], { encoding: 'utf8' }).stdout;
+const gitDirtyWithSelf = spawnSync('git', ['diff-index', 'HEAD', '--'], { encoding: 'utf8' }).stdout;
+const gitDirty = gitDirtyWithSelf.replace(/(?:^|\n):[0-9]+ [0-9]+ [0-9a-f]+ \w+ M\s+tsx2jsx\.mjs(?:\n|$)/, '\n').trim();
 if (gitDirty != '') {
   console.log(`error: git is dirty:\n\n${gitDirty}`);
   process.exit(1);
 }
 
+const foExtMap = {
+  'ts': 'js',
+  'tsx': 'jsx',
+};
+
+const globExt = '{' + Object.keys(foExtMap).join(',') + '}';
+// example: {ts,tsx}
+
+const globStr = `**/*.${globExt}`; // convert all files in workdir
+//const globStr = `./src/**/*.${extList}`; // convert all files in src/ folder
+console.log(`globStr = ${globStr}`)
+
 const todoTransform = [];
-//for (const fi of await glob('./src/**/*.tsx')) { // convert all files in src/ folder
-for (const fi of await glob('./**/*.tsx')) { // convert all files in workdir
-  const fo = fi.slice(0, -4) + '.jsx';
+
+for (const fi of await glob(globStr)) {
+  
+  //console.log(fi); continue; // debug
+
+  const fiParts = fi.split('.');
+  if (fiParts.slice(-2)[0] == 'd') {
+    console.log(`skip .d.ts file: ${fi}`);
+    continue;
+  }
+  const fiExt = fiParts.slice(-1)[0];
+  const foExt = foExtMap[fiExt];
+  if (!foExt) {
+    console.log(`FIXME handle input file extension ${JSON.stringify(fiExt)} for input file ${JSON.stringify(fi)}`);
+    continue;
+  }
+  const fo = fi.split('.').slice(0, -1).join('.') + '.' + foExt;
   console.log(`rename: ${fi} -> ${fo}`);
   spawnSync('git', ['mv', '-v', fi, fo]); // rename
   todoTransform.push([fi, fo]);
