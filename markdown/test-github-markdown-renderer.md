@@ -27,11 +27,33 @@ ok
 
 ok
 
+## html pre
+
+<pre>
+hello im preformatted
+</pre>
+
+ok
+
+## html blockquote
+
+<blockquote>
+  hello im quoted &mdash; me
+</blockquote>
+
+ok
+
 ### html div with title
 
 <div title="hello">
   html <b>bold</b>
 </div>
+
+ok
+
+### html span
+
+fooo <span color="red">to</span> <span color="green">the</span> bar
 
 ok
 
@@ -48,3 +70,15 @@ nope
 <img src="./foo.svg">
 
 ok
+
+## xml tags
+
+<asdf>
+  xml asdf content
+</asdf
+
+<nw>
+  xml nowrap content
+</nw>
+
+ugly, better use div or span
