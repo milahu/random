@@ -111,6 +111,16 @@ useful[^1] to implement[^2] annotations[^2]
 
 [^2]: collision in footnote id = only the first footnote is used
 
+footnote id test a [^a] asdf [^asdf] 0a [^0a] a0 [^a0]
+
+[^a]: a footnote
+
+[^asdf]: asdf footnote
+
+[^0a]: 0a footnote
+
+[^a0]: a0 footnote
+
 ## markdown heading ids
 
 ### My Great Heading 1 {#custom-id}
@@ -133,6 +143,8 @@ no
 ## highlight
 
 I need to highlight these ==very important words==.
+
+no
 
 ## html mark
 
