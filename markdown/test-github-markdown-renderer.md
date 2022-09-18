@@ -27,6 +27,16 @@ ok
 
 ok
 
+## html div with markdown content
+
+<div class="asdf">
+
+  **must** be *spaced* by [empty](#) lines `before` + after markdown ![missing image](./missing-image.svg)
+
+</div>
+
+ok
+
 ## html pre
 
 <pre>
@@ -71,6 +81,26 @@ nope
 
 ok
 
+## tt deprecated html tag
+
+<tt>tele to the type</tt>
+
+ok
+
+## html list
+
+<ol>
+  <li>one</li>
+  <li>two</li>
+</ol>
+
+<ul>
+  <li>some</li>
+  <li>thing</li>
+</ul>
+
+ok
+
 ## xml tags
 
 <asdf>
@@ -82,3 +112,19 @@ ok
 </nw>
 
 ugly, better use div or span
+
+## html style
+
+<style>
+  * { color: red; }
+</style>
+
+no, of course not
+
+## html script
+
+<script>
+  window.location = 'https://asdf.com/';
+</script>
+
+no, of course not
