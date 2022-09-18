@@ -121,6 +121,25 @@ footnote id test a [^a] asdf [^asdf] 0a [^0a] a0 [^a0]
 
 [^a0]: a0 footnote
 
+let me test a long footnote [^long-footnote]
+
+[^long-footnote]: yes
+this
+is
+working
+
+here is the next paragraph
+
+but the first word must be
+in the same line as the footnote label
+
+so this does NOT work
+
+[^long-footnote]:
+this does not work
+
+ok
+
 ## markdown heading ids
 
 ### My Great Heading 1 {#custom-id}
