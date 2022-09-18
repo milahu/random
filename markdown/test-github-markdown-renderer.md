@@ -138,6 +138,22 @@ so this does NOT work
 [^long-footnote]:
 this does not work
 
+test with escaped newline [^long-footnote-2]
+
+[^long-footnote-2]: \
+escaped newline works but is ugly,
+as it adds an extra newline before the footnote description \
+testing \
+more \
+\
+backslashes \
+so every backslash has the same effect as html `<br>` = hardbreak
+
+lets try double space at line end of the footnote label [^long-footnote-3]
+
+[^long-footnote-3]:  
+this does NOT work
+
 ok
 
 ## markdown heading ids
