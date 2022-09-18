@@ -101,6 +101,45 @@ ok
 
 ok
 
+## markdown footnotes
+
+useful[^1] to implement[^2] annotations[^2]
+
+[^1]: very useful!
+
+[^2]: yes, IMM PLEE MENNT
+
+[^2]: collision in footnote id = only the first footnote is used
+
+## markdown heading ids
+
+### My Great Heading 1 {#custom-id}
+
+[link to  My Great Heading 1](#custom-id)
+
+no
+
+## definition lists
+
+First Term
+: This is the definition of the first term.
+
+Second Term
+: This is one definition of the second term.
+: This is another definition of the second term.
+
+no
+
+## highlight
+
+I need to highlight these ==very important words==.
+
+## html mark
+
+I need to highlight these <mark>very important words</mark>.
+
+no, not visible
+
 ## xml tags
 
 <asdf>
