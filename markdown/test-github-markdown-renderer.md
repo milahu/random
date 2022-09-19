@@ -181,6 +181,22 @@ in p: not working, cannot mix markdown and html directly
 
 ok
 
+### footnote in html
+
+<div>
+  div content unspaced [^footnote-div-unspaced] = no
+</div>
+
+<div>
+
+  div content spaced [^footnote-div-spaced] = ok
+
+</div>
+
+[^footnote-div-unspaced]: asdf
+
+[^footnote-div-spaced]: foo
+  
 ## markdown heading ids
 
 ### My Great Heading 1 {#custom-id}
