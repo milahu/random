@@ -151,8 +151,33 @@ so every backslash has the same effect as html `<br>` = hardbreak
 
 lets try double space at line end of the footnote label [^long-footnote-3]
 
+lets try double space at line end of the footnote label [^long-footnote-3]
+
 [^long-footnote-3]:  
 this does NOT work
+
+footnote with multiple paragraphs: backslash [^long-footnote-4] div [^long-footnote-5] p [^long-footnote-6]
+
+[^long-footnote-4]: para
+graph
+1
+\
+para
+graph
+2: ok
+
+[^long-footnote-5]: <div>
+para
+graph
+in div: not working, cannot mix markdown and html directly
+</div>
+
+[^long-footnote-6]: <p>
+para
+graph
+in p: not working, cannot mix markdown and html directly
+</p>
+<p>
 
 ok
 
