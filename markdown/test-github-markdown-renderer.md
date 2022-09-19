@@ -236,6 +236,19 @@ I need to highlight these <mark>very important words</mark>.
 
 no, not visible
 
+## html attributes with empty lines
+
+this breaks
+
+<div
+title="a
+b
+
+c
+
+d"
+>hello</div>
+
 ## xml tags
 
 <asdf>
