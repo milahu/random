@@ -196,7 +196,15 @@ ok
 [^footnote-div-unspaced]: asdf
 
 [^footnote-div-spaced]: foo
-  
+
+### mdbook-footnote
+
+https://github.com/daviddrysdale/mdbook-footnote
+
+Normal text{{footnote: Or is it?}} in body.
+
+no, as expected, this is non-standard
+
 ## markdown heading ids
 
 ### My Great Heading 1 {#custom-id}
