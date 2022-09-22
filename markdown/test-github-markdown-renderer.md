@@ -53,7 +53,7 @@ ok
 
 ok
 
-### html div with title
+### html div with title (annotation)
 
 <div title="hello">
   html <b>bold</b>
@@ -64,6 +64,16 @@ ok
 ### html span
 
 fooo <span color="red">to</span> <span color="green">the</span> bar
+
+ok
+
+### html span with title (annotation)
+
+yellow background color: no
+
+blue text color: yes
+
+fooo <span title="hello world" color="blue" background="yellow">lalalalalalalalala</span> bar
 
 ok
 
@@ -351,7 +361,9 @@ todo: produce this code in rendering from markdown to html. its pretty!
 
 ## annotation as inline html details
 
-some text [with inline annotation](#note-example-annotation-in-details) <details id="note-example-annotation-in-details">
+`display="inline"` has no effect &rarr; details is block element
+
+some text [with inline annotation](#note-example-annotation-in-inline-details) <details display="inline" id="note-example-annotation-in-inline-details">
 
   dee
   tail
