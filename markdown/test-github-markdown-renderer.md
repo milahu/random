@@ -197,18 +197,36 @@ aka: footnote with text reference
 
 normally, only numbers are used as references like `[1]`
 
-this is probably not working [^text-link-to-footnote]
-
 [working with extra ID](#footnote-text-link-to-footnote)[^text-link-to-footnote]
 
-[not working][^text-link-to-footnote]
-
-[not working]([^text-link-to-footnote])
-
-[not working](^text-link-to-footnote)
-
 [^text-link-to-footnote]: <span id="footnote-text-link-to-footnote"></span> success! now back to: this is probably not working
-  
+
+
+
+not working [^text-link-to-footnote-2]
+
+[^text-link-to-footnote-2]: success! now back to: this is probably not working 2
+
+
+
+[not working][^text-link-to-footnote-3]
+
+[^text-link-to-footnote-3]: success! now back to: this is probably not working 2
+
+
+
+[not working]([^text-link-to-footnote-4])
+
+[^text-link-to-footnote-4]: success! now back to: this is probably not working 2
+
+
+
+[not working](^text-link-to-footnote-5)
+
+[^text-link-to-footnote-5]: success! now back to: this is probably not working 2
+
+
+
 ### footnote in html
 
 <div>
