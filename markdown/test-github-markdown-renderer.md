@@ -326,6 +326,29 @@ no. details are not open on click
 
 but this works in mdbook
 
+## annotation as html details, open details on click, focusable with tabindex attribute
+
+trick: make details focusable with tabindex="-1" attribute, based on https://allyjs.io/data-tables/focusable.html and https://stackoverflow.com/questions/1599660/which-html-elements-can-receive-focus
+
+[clickme yeah](#note-details-clickable-tabindex)
+
+<!-- todo add tabindex/onfocus in dynamic or static render with selector details.annotation -->
+
+<details class="annotation" id="note-details-clickable-tabindex" tabindex="-1" onfocus="if (!this.open) { this.open = true; }" style="border: 1px solid grey; margin: 1em 0px; padding: 0.5em 0.5em 0.5em 1em">
+<summary>sum sum sum</summary>
+
+here
+goes
+the bla
+bla
+bla
+
+</details>
+
+not working on github
+
+todo: produce this code in rendering from markdown to html. its pretty!
+
 ## annotation as inline html details
 
 some text [with inline annotation](#note-example-annotation-in-details) <details id="note-example-annotation-in-details">
