@@ -376,6 +376,16 @@ yes, this is better than "hidden" div
 
 but its more invasive than footnotes
 
+## html pre with span color
+
+useful for manual syntax highlighting
+
+<pre>
+<span color="red">hello</span> world
+</pre>
+
+ok
+
 ## xml tags
 
 <asdf>
