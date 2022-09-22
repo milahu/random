@@ -249,6 +249,63 @@ c
 d"
 >hello</div>
 
+## annotation as html hidden element
+
+some text [with annotation](#note-example-annotation-in-hidden-div)
+
+the annotation content
+
+is stored
+
+in a html `<div hidden>` element
+
+<div hidden="hidden" id="note-example-annotation-in-hidden-div">
+
+  hii
+  ddd
+  eeee
+  nnnn
+
+</div>
+
+no. div is not hidden on github
+
+## annotation as html details
+
+some text [with annotation](#note-example-annotation-in-details)
+
+the annotation content
+
+is stored
+
+in a html `<details>` element
+
+<details id="note-example-annotation-in-details">
+
+  dee
+  tail
+  ss
+  ss
+
+</details>
+
+yes, this is better than "hidden" div
+
+## annotation as inline html details
+
+some text [with inline annotation](#note-example-annotation-in-details) <details id="note-example-annotation-in-details">
+
+  dee
+  tail
+  ss
+  ss
+
+</details> and then the text continues
+
+yes, this is better than "hidden" div
+
+but its more invasive than footnotes
+
 ## xml tags
 
 <asdf>
