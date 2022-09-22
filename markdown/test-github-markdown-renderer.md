@@ -191,6 +191,24 @@ in p: not working, cannot mix markdown and html directly
 
 ok
 
+### text link to footnote
+
+aka: footnote with text reference
+
+normally, only numbers are used as references like `[1]`
+
+this is probably not working [^text-link-to-footnote]
+
+[working with extra ID](#footnote-text-link-to-footnote)[^text-link-to-footnote]
+
+[not working][^text-link-to-footnote]
+
+[not working]([^text-link-to-footnote])
+
+[not working](^text-link-to-footnote)
+
+[^text-link-to-footnote]: <span id="footnote-text-link-to-footnote"></span> success! now back to: this is probably not working
+  
 ### footnote in html
 
 <div>
