@@ -291,6 +291,41 @@ in a html `<details>` element
 
 yes, this is better than "hidden" div
 
+## annotation as html details, open details on click
+
+click link to open details
+
+idea: add an empty `<span id="x">` inside `<details>`
+
+<a href="#note-details-clickable-0">clickme 0</a>
+
+<a href="#note-details-clickable-1">clickme 1</a>
+
+<a href="#note-details-clickable-2">clickme 2</a>
+
+<a href="#note-details-clickable-3">clickme 3</a>
+
+<details id="note-details-clickable-0">
+  <summary>
+    this is a clickable annotation
+  </summary>
+  <!--
+    not working on github. details are not open on click
+  -->
+  <span id="note-details-clickable-1"></span>
+  <a name="note-details-clickable-2">
+  <div id="note-details-clickable-3">
+    blah
+  </div>
+  blah
+  blah
+  blah
+</details>
+
+no. details are not open on click
+
+but this works in mdbook
+
 ## annotation as inline html details
 
 some text [with inline annotation](#note-example-annotation-in-details) <details id="note-example-annotation-in-details">
