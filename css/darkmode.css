@@ -1,0 +1,20 @@
+
+/* light mode */
+:root { --fg: black; --bg: white; }
+
+/* dark mode */
+@media screen {
+  @media (prefers-color-scheme: dark) { 
+    :root { --fg: white; --bg: black; } 
+    .darkmode-invert {
+      filter: invert();
+    }
+  }
+  /* darkreader extension */
+  :root[data-darkreader-mode="dynamic"] {
+    --fg: white; --bg: black;
+  }
+  :root[data-darkreader-mode="dynamic"] .darkmode-invert {
+    filter: invert();
+  }
+}
