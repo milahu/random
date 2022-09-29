@@ -1,3 +1,20 @@
+/*
+
+example use:
+
+<html>
+  <img class="darkmode-invert" src="path/to/image.svg">
+</html>
+
+<style>
+  pre {
+    /* flip colors in <pre> */
+    color: var(--bg);
+    background-color: var(--fg);
+  }
+</style>
+
+*/
 
 /* light mode */
 :root { --fg: black; --bg: white; }
