@@ -1,14 +1,17 @@
 /*
 
-example use:
+## example use
+
+### invert image colors
 
 <html>
   <img class="darkmode-invert" src="path/to/image.svg">
 </html>
 
+### invert colors in <pre>
+
 <style>
   pre {
-    /* flip colors in <pre> */
     color: var(--bg);
     background-color: var(--fg);
   }
