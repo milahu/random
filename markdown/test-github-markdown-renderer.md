@@ -453,3 +453,43 @@ no, of course not
 </script>
 
 no, of course not
+
+## syntax highlighting
+
+https://docs.github.com/en/get-started/learning-about-github/github-language-support
+
+https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/creating-and-highlighting-code-blocks
+
+https://github.com/github/linguist/blob/master/lib/linguist/languages.yml
+
+### nix
+
+```nix
+[ 1 2 ] ++ [ 3 4 ]
+```
+
+### haskell
+
+```hs
+attrByPath :: [String] -> Any -> AttrSet -> Any
+```
+
+### console
+
+```console
+$ echo hello
+hello
+
+$ echo world
+world
+```
+
+### bash
+
+```sh
+function main() {
+  echo hello $1
+}
+
+main world
+```
