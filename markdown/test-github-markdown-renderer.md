@@ -255,13 +255,49 @@ Normal text{{footnote: Or is it?}} in body.
 
 no, as expected, this is non-standard
 
-## markdown heading ids
+## markdown heading ids extension
 
 ### My Great Heading 1 {#custom-id}
 
 [link to  My Great Heading 1](#custom-id)
 
 no
+
+## markdown heading all html
+
+<h3 id="some-custom-heading-id-a">heading</h3>
+
+[link to heading](#some-custom-heading-id-a)
+
+<h3 id="some-custom-heading-id-b">heading</h3>
+
+[link to heading](#some-custom-heading-id-b)
+
+## markdown heading ids html
+
+https://gist.github.com/asabaylus/3071099
+
+### <a name="custom-id-html-a-name-headlink"/>[heading](#custom-id-html-a-name-headlink)
+
+link in heading, and here:
+
+[link to custom-id-html-a-name-headlink](#custom-id-html-a-name-headlink)
+
+... this is probably the best solution
+
+note: no whitespace around the `<a id="...">` tag
+
+### <a id="custom-id-html-a-id"/>heading
+
+[link to custom-id-html-a-id](#custom-id-html-a-id)
+
+### heading<a id="custom-id-html-a-id-after"/>
+
+[link to custom-id-html-a-id-after](#custom-id-html-a-id-after)
+
+### <a name="custom-id-html-a-name"/>heading
+
+[link to custom-id-html-a-name](#custom-id-html-a-name)
 
 ## definition lists
 
