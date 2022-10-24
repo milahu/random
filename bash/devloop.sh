@@ -10,11 +10,11 @@ restart_delay=2
 
 command="$1" # TODO use all args: $@
 
-# example: drop cache, run vite
-#command="rm -rf node_modules/.vite/ ; npx vite --clearScreen false"
 if [ -z "$command" ]
 then
   command="( set -x; sleep 5 ); false # example command: sleep 5 seconds, set rc=1"
+  # example: drop cache, run vite
+  #command="rm -rf node_modules/.vite/ ; npx vite --clearScreen false"
 fi
 
 loop_next() {
