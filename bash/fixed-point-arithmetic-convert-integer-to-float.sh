@@ -27,7 +27,7 @@
 
 
 divide_1000() {
-  # fixed-point math divison by 1000    
+  # fixed-point math divison by 1000
   if [[ "$1" == "" ]]; then echo 0; return; fi
   a=000$1; a=${a:0: -3}
   while [ "${a:0:1}" = 0 ]; do a=${a:1}; done
