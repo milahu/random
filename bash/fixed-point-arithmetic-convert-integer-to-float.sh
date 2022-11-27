@@ -24,23 +24,24 @@
 # Fixed-point arithmetic
 # https://en.wikipedia.org/wiki/Fixed-point_arithmetic
 
-for msecs in "" 0 1 12 123 1234 12345 123456 1234567 12345678 123456789
-do
 
-  # int msecs -> float secs
-  a=000$msecs
-  a=${a:0: -3}
+
+divide_1000() {
+  # fixed-point math divison by 1000    
+  if [[ "$1" == "" ]]; then echo 0; return; fi
+  a=000$1; a=${a:0: -3}
   while [ "${a:0:1}" = 0 ]; do a=${a:1}; done
   if [ -z "$a" ]; then a=0; fi
-  b=000$msecs
-  b=${b: -3}
-  secs=$a.$b
+  b=000$1; b=${b: -3}
+  echo $a.$b
+}
 
-  if [[ "$msecs" == "" ]]
-  then
-    printf '%-10s %10s\n' "(empty)" $secs
-  else
-    printf '%-10s %10s\n' $msecs $secs
-  fi
 
+
+# demo
+for msecs in "" 0 1 12 123 1234 12345 123456 1234567 12345678 123456789
+do
+  # int msecs -> float secs
+  secs=$(divide_1000 "$msecs")
+  printf '%-10s %10s\n' $msecs $secs
 done
