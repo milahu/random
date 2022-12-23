@@ -1,0 +1,2 @@
+![GitHub Repo stars](https://img.shields.io/github/stars/some_user/some_repo)
+![GitHub last commit](https://img.shields.io/github/last-commit/some_user/some_repo)
