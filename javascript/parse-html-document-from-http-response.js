@@ -1,4 +1,3 @@
-
 /**
 * parse html document from http response. \
 * also handle non-utf8 data.
@@ -31,7 +30,7 @@ async function documentOfResponse(response) {
 /*
 // demo
 const response = await fetch("https://github.com/")
-const doc = await docOfResponse(response)
+const doc = await documentOfResponse(response)
 const title = doc.querySelector("title")
 console.log(title)
 */
