@@ -1,9 +1,18 @@
+
 /**
-* parse html document from http response. also handle non-utf8 data
+* parse html document from http response. \
+* also handle non-utf8 data.
+*
+* use this instead of
+* ```
+* const html = await response.text()
+* const doc = new DOMParser().parseFromString(html, "text/html");
+* ```
+*
 * @param {Response} response
 * @return {Document}
 */
-async function docOfResponse(response) {
+async function documentOfResponse(response) {
   // example content-type: text/html; charset=ISO-8859-1
   const type = response.headers.get("content-type").split(";")[0] || "text/html"
   const charset = (response.headers.get("content-type").match(/;\s*charset=(.*)(?:;|$)/) || [])[1]
