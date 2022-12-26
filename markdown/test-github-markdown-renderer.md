@@ -534,6 +534,8 @@ main world
 
 not working. all images are display:block
 
+the only attributes that work on images are align="left" align="right" align="top" align="bottom"
+
 github stylesheet has
 
 ```css
