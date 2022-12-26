@@ -529,3 +529,46 @@ function main() {
 
 main world
 ```
+
+## inline images
+
+not working. all images are display:block
+
+github stylesheet has
+
+```css
+img, svg, video, canvas, audio, iframe, embed, object {
+    display: block;
+    vertical-align: middle;
+}
+```
+
+... which we can not override with html attributes like `display="inline"`
+
+biggrin ![](biggrin.png) markdown
+biggrin <img src="biggrin.png"> html
+biggrin <img src="biggrin.png" display="inline"> display="inline"
+biggrin <img src="biggrin.png" display="inline-block"> display="inline-block"
+biggrin <img src="biggrin.png" align="right"> align="right"
+biggrin <img src="biggrin.png" align="left"> align="left"
+biggrin <img src="biggrin.png" align="top"> align="top"
+biggrin <img src="biggrin.png" align="bottom"> align="bottom"
+biggrin <img src="biggrin.png" align="char"> align="char"
+biggrin <img src="biggrin.png" align="center"> align="center"
+biggrin <img src="biggrin.png" align="center middle"> align="center middle"
+biggrin <img src="biggrin.png" align="middle"> align="middle"
+biggrin <img src="biggrin.png" float="left"> float="left"
+biggrin <img src="biggrin.png" width="16" height="16"> width height
+biggrin <img src="biggrin.png" compact="true"> compact="true"
+biggrin <img src="biggrin.png" compact> compact
+biggrin <img src="biggrin.png" alt=":D"> alt=":D"
+biggrin <img src="biggrin.png" border="0"> border="0"
+biggrin <img src="biggrin.png" hspace="0"> hspace="0"
+biggrin <img src="biggrin.png" ismap="true"> ismap="true"
+biggrin <img src="biggrin.png" ismap="false"> ismap="false"
+biggrin <img src="biggrin.png" name="biggrin"> name="biggrin"
+biggrin <img src="biggrin.png" vspace="0"> vspace="0"
+biggrin <table><tbody><tr><td><img src="biggrin.png"></td></tr></tbody></table> table
+biggrin <div><img src="biggrin.png"></div> div
+biggrin <span><img src="biggrin.png"></span> span
+biggrin <span float="left"><img src="biggrin.png"></span> span  float="left"
