@@ -1,0 +1,178 @@
+#! /usr/bin/env bash
+
+# git-shallow-maker
+# copy only needed commits to a new repo
+# MIT license
+
+set -e
+
+if [[ $# != 2 ]]; then
+  echo usage: git-shallow-maker path/to/old/repo path/to/new/repo
+  exit 1
+fi
+
+old="$1"
+new="$2"
+
+if ! [ -d "$old" ]; then
+  echo "error: old is not a directory: $old"
+  exit 1
+fi
+
+if [ -e "$new" ]; then
+  echo "warning: new exists: $new"
+  echo "hit enter to continue"
+  read
+fi
+
+# get absolute paths
+old_abs=$(readlink -f "$old")
+new_abs=$(readlink -f "$new")
+
+# https://stackoverflow.com/questions/38171899/how-to-reduce-the-depth-of-an-existing-git-clone
+
+# git formats
+# https://git-scm.com/docs/pretty-formats
+
+# TODO store in variable
+echo "size before:"
+du -sh "$old"/.git
+
+# debug: list branches
+echo "branches:"
+TZ=UTC0 git -C "$old" branch --list --format '%(objectname) %(authordate:iso-local) %(refname)'
+
+# get head commit of all branches (including master/main/...)
+# https://stackoverflow.com/questions/36026185/name-only-option-for-git-branch-list
+# https://stackoverflow.com/questions/51362007/collecting-a-list-of-all-branches-in-a-repository-in-a-special-format-git
+branch_revs=$(git -C "$old" branch --list --format '%(objectname)')
+
+# find oldest commit shared by all branches
+# https://git-scm.com/docs/git-merge-base
+# octopus: find the best common ancestor of *all* commits
+# all: print all results if ambiguous
+if false; then
+# manually set oldest_commit
+# useful when working with broken repos
+oldest_commit=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+else
+oldest_commit=$(git -C "$old" merge-base --octopus --all $branch_revs)
+if [[ -z "$oldest_commit" ]]; then
+  echo "error: oldest_commit was not found"
+  exit 1
+fi
+if [[ $(echo "$oldest_commit" | wc -l) != 1 ]]; then
+  # TODO no error?
+  echo "error: oldest_commit is ambiguous:"
+  echo "$oldest_commit"
+  exit 1
+fi
+fi
+
+echo "found oldest commit:"
+#git show $oldest_commit
+echo $oldest_commit
+# TODO fix format
+#TZ=UTC0 git show --format '%(objectname) %(authordate:iso-local) %(refname)' $oldest_commit
+
+if false; then
+# delete all remote branches
+# https://stackoverflow.com/a/73330580/10440128
+# TODO delete only unused branches
+#git branch -rd $(git branch -r | grep -v 'origin/HEAD')
+extra_remote_branches=$(git -C "$old" branch -r | grep -v -F '/HEAD -> ' || true)
+if [[ -n "$extra_remote_branches" ]]; then
+  git -C "$old" branch -rd $extra_remote_branches
+fi
+fi
+
+# what did not work ...
+if false; then
+# delete old commits
+# https://stackoverflow.com/questions/4698759/converting-git-repository-to-shallow/7937916#7937916
+# https://stackoverflow.com/questions/33906288/delete-history-in-local-repository-instead-of-cloning-it-again-with-depth-1
+echo "deleting commits before $oldest_commit"
+echo "hit enter to continue"
+read
+echo $oldest_commit > .git/shallow
+(set -x
+#git reflog expire --expire=0
+# In order to remove all references, add --all to the reflog command --Jiyong Park
+git -C "$old" reflog expire --expire=now --all
+git -C "$old" prune
+#error: Could not read 29026cc404895cc9f9afa55c4e2d53b7a4a5a319
+#fatal: Failed to traverse parents of commit 0478f8b360288a4be8c71bf11e42fcaf09b8b773
+git -C "$old" prune-packed
+)
+elif false; then
+echo $oldest_commit > .git/shallow
+(set -x
+git -C "$old" gc
+git -C "$old" repack -Ad      # kills in-pack garbage
+git -C "$old" repack -Ad || true
+# error: Could not read 29026cc404895cc9f9afa55c4e2d53b7a4a5a319
+# fatal: Failed to traverse parents of commit 0478f8b360288a4be8c71bf11e42fcaf09b8b773
+# fatal: failed to run repack
+#
+# -> some commits are missing, repo is broken
+# solution: patch parents
+# broken_commit=0478f8b360288a4be8c71bf11e42fcaf09b8b773; git replace --graft $oldest_commit $broken_commit
+git -C "$old" prune           # kills loose garbage
+)
+
+# what *does* work
+elif true; then
+# https://stackoverflow.com/questions/49039959/git-clone-specific-list-of-branches
+# https://stackoverflow.com/questions/54181901/fetching-only-the-range-of-commits-not-present-in-base-branch
+echo "creating shallow repo: $new"
+mkdir -p "$new"
+git -C "$new" init
+branch_refs=$(git -C "$old" branch --list --format '%(refname)')
+main_branch=refs/heads/master # TODO
+echo "looping branches:"
+echo "$branch_refs"
+# "git rev-list" fails on a broken repo:
+# git -C nixpkgs/ rev-list --count b00aa8ded74..master
+# error: Could not read 29026cc404895cc9f9afa55c4e2d53b7a4a5a319
+# fatal: revision walk setup failed
+# -> use git log + grep -m1
+# git -C nixpkgs/ log --format=%H master | grep -m1 -n ^b00aa8ded74
+# 48272:b00aa8ded743862adc8d6cd3220e91fb333b86d3
+for branch in $branch_refs; do
+  echo "branch: $branch"
+  # https://stackoverflow.com/questions/31997999/number-of-commits-between-two-commitishes
+  #depth=$(git -C "$old" TODO)
+
+  if branch_base=$(git -C "$old" merge-base $main_branch $branch); then
+
+  #depth=$(git -C "$old" rev-list --count $branch_base..$branch)
+  depth=$(git -C "$old" log --format=%H $branch | grep -m1 -n -x $branch_base | cut -d: -f1)
+  if [[ "$depth" == 0 ]]; then
+    # branch is main branch
+    #continue
+    branch_base=$oldest_commit
+    #depth=$(git -C "$old" rev-list --count $branch_base..$branch)
+    depth=$(git -C "$old" log --format=%H $branch | grep -m1 -n -x $branch_base | cut -d: -f1)
+  fi
+  depth=$((depth + 1))
+  echo "branch_base: $branch_base"
+  echo "depth: $depth"
+  (set -x
+  #git -C "$new" fetch file://$old $oldest_commit..$branch:$branch # invalid refspec
+  #git -C "$new" fetch file://$old $oldest_commit...$branch:$branch # invalid refspec
+  git -C "$new" fetch file://$old_abs $branch:$branch --depth $depth
+  )
+
+  else
+    echo "dangling branch: no path to master branch"
+    echo "fetching the whole branch"
+    git -C "$new" fetch file://$old_abs $branch:$branch
+  fi
+  #exit # debug
+done
+else
+echo noop
+fi
+
+echo "size after:"
+du -sh "$new"/.git
