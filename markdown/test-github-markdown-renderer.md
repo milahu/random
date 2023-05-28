@@ -81,6 +81,12 @@ fooo <span title="hello world" color="blue" background="yellow">lalalalalalalala
 
 ok
 
+### html ins del
+
+fooo <ins>inserted text</ins> and <del>deleted text</del> bar
+
+ok: ins is rendered as underline-text, del is rendered as strikethrough-text
+
 ## html svg
 
 <svg viewBox="-50 -50 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg">
