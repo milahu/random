@@ -538,11 +538,7 @@ main world
 
 ## inline images
 
-not working. all images are display:block
-
-the only attributes that work on images are align="left" align="right" align="top" align="bottom"
-
-github stylesheet has
+github default image style:
 
 ```css
 img, svg, video, canvas, audio, iframe, embed, object {
@@ -550,8 +546,6 @@ img, svg, video, canvas, audio, iframe, embed, object {
     vertical-align: middle;
 }
 ```
-
-... which we can not override with html attributes like `display="inline"`
 
 biggrin ![](biggrin.png) markdown
 biggrin <img src="biggrin.png"> html
