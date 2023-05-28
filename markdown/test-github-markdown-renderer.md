@@ -324,7 +324,7 @@ no, not visible
 
 ## html attributes with empty lines
 
-this breaks
+this `<div title="...">...</div>` breaks with empty lines in html
 
 <div
 title="a
