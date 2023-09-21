@@ -12,6 +12,7 @@
 - [readme.svg is used but rendered as plain text](10)
 - [a broken symlink in .github/readme.md does not work](11)
 - [a custom file like index.md is used when symlinked from .github/readme.md](12)
+- [a symlink from .github/readme.md to ../readme.png does not work: "We can't display this README because it appears to contain binary data."](13)
 - ...
 
 see also: https://github.com/foambubble/foam/issues/1128
