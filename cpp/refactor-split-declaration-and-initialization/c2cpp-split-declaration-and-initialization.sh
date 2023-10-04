@@ -19,6 +19,8 @@
 #   - parse the output of "g++"
 #   - write "todo.diff"
 # - apply the patch with "patch -p1 <todo.diff"
+#   - in rare cases, some diff hunks will fail to apply
+#     so you have to manually patch the code
 # - retry to compile = manually run "make"
 # - maybe repeat, until all "crosses initialization" errors are gone
 
