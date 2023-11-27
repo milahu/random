@@ -1,0 +1,158 @@
+<html>
+
+<!--
+  Use details and summary tags as collapsible inline elements
+  https://stackoverflow.com/questions/57846345/use-details-and-summary-tags-as-collapsible-inline-elements
+
+  inline details are not possible with pure CSS
+  because browsers ignore `details { display: inline; }`
+  (i would call that a bug)
+
+  as a workaround, i use some javascript
+  to replace details with span.details
+  and summary with span.summary
+
+  this will show the closed details as [Spoiler]
+  and the open details as [Spoiler: spoiler text]
+
+  with javascript off
+  the open [Spoiler] becomes a display:block element
+
+  maybe there is another way to fix this in CSS
+  but i have not-yet found it
+-->
+
+<head>
+
+  <meta charset="utf-8">
+
+  <title>inline details spoiler with css and javascript</title>
+
+  <style>
+
+    /* inline details to show a spoiler text */
+    /* limitation: the spoiler is not inline */
+    details, details[open], span.details {
+      /* this only works for content after <details> as long <details> is closed */
+      display: inline;
+    }
+    details>summary, details[open]>summary, span.details>span.summary {
+      /* remove the triangle left of <summary> */
+      display: inline;
+      /* <summary> is clickable. show it */
+      cursor: pointer;
+    }
+    details>summary:before, span.details>span.summary:before {
+      content: "[";
+    }
+    details>summary:after, span.details>span.summary:after {
+      content: "]";
+    }
+    details[open]>summary:after, span.details[open]>span.summary:after {
+      content: ":";
+      display: inline;
+    }
+    span.details[closed]>*:not(span.summary) {
+      display: none;
+    }
+    details[open]:after, span.details[open]:after {
+      content: "]";
+      display: inline;
+      /* remove extra space before "]" */
+      margin-left:-0.25em;
+    }
+    details>summary>*, span.details>span.summary>* {
+      /* fix block elements in <summary> */
+      display: inline;
+    }
+
+  </style>
+
+  <script>
+    function makeInlineDetails() {
+      Array.from(document.querySelectorAll("details")).map(details => {
+        // perf: hide details to avoid onscreen repaints
+        const displayBak = details.style.display;
+        // note: this will add an empty "style" attribute to spanDetails
+        details.style.display = "none";
+        const spanDetails = document.createElement("span");
+        // move child nodes from details to spanDetails
+        while (details.firstChild) {
+          if (details.firstChild.localName == "summary") {
+            const summary = details.firstChild;
+            const spanSummary = document.createElement("span");
+            // move child nodes from summary to spanSummary
+            while (summary.firstChild) {
+              spanSummary.appendChild(summary.firstChild);
+            }
+            // copy attributes from summary to spanSummary
+            for (let i = summary.attributes.length - 1; i >= 0; --i) {
+              spanSummary.attributes.setNamedItem(summary.attributes[i].cloneNode());
+            }
+            spanSummary.classList.add("summary");
+            spanSummary.onclick = (event) =>  {
+              const spanDetails = event.target.parentNode;
+              if (spanDetails.hasAttribute("open")) {
+                spanDetails.removeAttribute("open", "");
+                spanDetails.setAttribute("closed", "");
+              }
+              else {
+                spanDetails.removeAttribute("closed", "");
+                spanDetails.setAttribute("open", "");
+              }
+            };
+            spanDetails.appendChild(spanSummary);
+            details.removeChild(details.firstChild);
+          }
+          else {
+            spanDetails.appendChild(details.firstChild);
+          }
+        }
+        // copy attributes from details to spanDetails
+        for (let i = details.attributes.length - 1; i >= 0; --i) {
+            spanDetails.attributes.setNamedItem(details.attributes[i].cloneNode());
+        }
+        spanDetails.classList.add("details");
+        if (!spanDetails.hasAttribute("open")) {
+          spanDetails.setAttribute("closed", "");
+        }
+        if (displayBak != "block") {
+            spanDetails.style.display = displayBak;
+        }
+        else {
+            spanDetails.style.display = "inline";
+        }
+        details.replaceWith(spanDetails);
+      });
+    }
+    //window.onload = makeInlineDetails();
+  </script>
+
+</head>
+
+<body>
+
+<p>
+  <button onClick="makeInlineDetails()">makeInlineDetails()</button>
+</p>
+
+<div>
+  (text before spoiler, text before spoiler, text before spoiler,
+  text before spoiler, text before spoiler, text before spoiler,
+  text before spoiler, text before spoiler, text before spoiler)
+  <details>
+    <summary>Spoiler</summary>
+    <span>
+      (spoiler text, spoiler text, spoiler text,
+      spoiler text, spoiler text, spoiler text,
+      spoiler text, spoiler text, spoiler text)
+    </span>
+  </details>
+  (text after spoiler, text after spoiler, text after spoiler,
+  text after spoiler, text after spoiler, text after spoiler,
+  text after spoiler, text after spoiler, text after spoiler)
+</div>
+
+</body>
+
+</html>
