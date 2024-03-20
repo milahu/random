@@ -19,8 +19,15 @@ if [ $# = 1 ] && [ -e "$1" ] && [ "${1: -34}" == "/.git/rebase-merge/git-rebase-
   # arg is commit list file
   # this script was called via sequence.editor
   todo_path="$1"
-  todo_text=$(grep "^pick " "$todo_path")
-  echo "$todo_text" | sort -k3 >"$todo_path"
+  todo_text_1=$(grep "^pick " "$todo_path")
+  # sort by column 3
+  todo_text_2=$(echo "$todo_text_1" | sort -k3)
+  if [ "$todo_text_1" = "$todo_text_2" ]; then
+    # no change
+    touch $GIT_REBASE_TODO_EMPTY_PATH
+    exit
+  fi
+  echo "$todo_text_2" > "$todo_path"
   exit
 
 fi
@@ -29,7 +36,23 @@ fi
 # the todo file will have 3 columns:
 # pick $hash $timestamp
 
+export GIT_REBASE_TODO_EMPTY_PATH=$(mktemp -u)
+
 git \
   -c rebase.instructionFormat="%at" \
   -c sequence.editor="$0" \
   rebase -i "$@"
+
+rc=$?
+
+# fix: exit 0 when nothing to do
+if [ $rc = 1 ] && [ -e $GIT_REBASE_TODO_EMPTY_PATH ]; then
+  rc=0
+  echo "ok: nothing to do"
+fi
+
+if [ -e $GIT_REBASE_TODO_EMPTY_PATH ]; then
+  rm $GIT_REBASE_TODO_EMPTY_PATH
+fi
+
+exit $rc
