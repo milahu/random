@@ -112,7 +112,7 @@ for (const [fi, fo] of todoTransform) {
   const i = fs.readFileSync(fo, 'utf8');
   const o = transformTSOnly(i);
   // always do your backups :P
-  fs.writeFileSync(fo, o, 'utf8'); // replace
+  fs.writeFileSync(fo, o.code, 'utf8'); // replace
   spawnSync('git', ['add', fo]); // add
 }
 spawnSync('git', ['commit', '-m', 'tsx2jsx: transform']); // commit
