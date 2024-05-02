@@ -1,0 +1,31 @@
+
+/nix/store/fa1fn9p561cy7nlzvdgmkgzpy20fxcm5-wine-9.0/bin/wine-preloader:     file format elf32-i386
+
+
+Disassembly of section .text:
+
+7d4002d0 <fatal_error>:
+7d4002d0:	56                   	push   %esi
+7d4002d1:	be 02 00 00 00       	mov    $0x2,%esi
+7d4002d6:	53                   	push   %ebx
+7d4002d7:	81 ec 00 01 00 00    	sub    $0x100,%esp
+7d4002dd:	8b 94 24 0c 01 00 00 	mov    0x10c(%esp),%edx
+7d4002e4:	89 e3                	mov    %esp,%ebx
+7d4002e6:	8d 8c 24 10 01 00 00 	lea    0x110(%esp),%ecx
+7d4002ed:	89 d8                	mov    %ebx,%eax
+7d4002ef:	e8 9c fd ff ff       	call   7d400090 <wld_vsprintf>
+7d4002f4:	89 d9                	mov    %ebx,%ecx
+7d4002f6:	89 c2                	mov    %eax,%edx
+7d4002f8:	b8 04 00 00 00       	mov    $0x4,%eax
+7d4002fd:	53                   	push   %ebx
+7d4002fe:	89 f3                	mov    %esi,%ebx
+7d400300:	cd 80                	int    $0x80
+7d400302:	5b                   	pop    %ebx
+7d400303:	b8 01 00 00 00       	mov    $0x1,%eax
+7d400308:	8d b4 26 00 00 00 00 	lea    0x0(%esi,%eiz,1),%esi
+7d40030f:	90                   	nop
+7d400310:	53                   	push   %ebx
+7d400311:	89 c3                	mov    %eax,%ebx
+7d400313:	cd 80                	int    $0x80
+7d400315:	5b                   	pop    %ebx
+7d400316:	eb f8                	jmp    7d400310 <fatal_error+0x40>

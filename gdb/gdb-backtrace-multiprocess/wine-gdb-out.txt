@@ -1,0 +1,114 @@
++set follow-exec-mode new
++set breakpoint pending on
++set follow-fork-mode child
++break execv
+Function "execv" not defined.
+Breakpoint 1 (execv) pending.
++break execvp
+Function "execvp" not defined.
+Breakpoint 2 (execvp) pending.
++break exit
+Breakpoint 3 at 0x20f0
++break syscall
+Function "syscall" not defined.
+Breakpoint 4 (syscall) pending.
++break fatal_error
+Function "fatal_error" not defined.
+Breakpoint 5 (fatal_error) pending.
++break getuid
+Function "getuid" not defined.
+Breakpoint 6 (getuid) pending.
++break getenv
+Breakpoint 7 at 0x20b0
++break syscall
+Function "syscall" not defined.
+Breakpoint 8 (syscall) pending.
++run
+warning: File "/nix/store/qcssalnxr02k3fyr3n6lvrb4p842k8n2-glibc-2.38-27/lib/libthread_db.so.1" auto-loading has been declined by your `auto-load safe-path' set to "$debugdir:$datadir/auto-load:/nix/store/f1ii69v7p27z1r5zybmlbld3bdzm6a5f-gcc-13.2.0-lib:/home/user/src/voice-control/.gdbinit".
+To enable execution of this file add
+	add-auto-load-safe-path /nix/store/qcssalnxr02k3fyr3n6lvrb4p842k8n2-glibc-2.38-27/lib/libthread_db.so.1
+line to your configuration file "/home/user/.gdbinit".
+To completely disable this security protection add
+	set auto-load safe-path /
+line to your configuration file "/home/user/.gdbinit".
+For more information about this security protection see the
+"Auto-loading safe path" section in the GDB manual.  E.g., run from the shell:
+	info "(gdb)Auto-loading safe path"
+warning: Unable to find libthread_db matching inferior's thread library, thread debugging will not be available.
+
+Breakpoint 7, 0xf7c3e3a0 in getenv () from /nix/store/qcssalnxr02k3fyr3n6lvrb4p842k8n2-glibc-2.38-27/lib/libc.so.6
++info threads
+  Id   Target Id               Frame 
+* 1    process 2758441 ".wine" 0xf7c3e3a0 in getenv () from /nix/store/qcssalnxr02k3fyr3n6lvrb4p842k8n2-glibc-2.38-27/lib/libc.so.6
++printf "%s\n", $eax
+WINEDLLPATH
++info threads
+  Id   Target Id               Frame 
+* 1    process 2758441 ".wine" 0xf7c3e3a0 in getenv () from /nix/store/qcssalnxr02k3fyr3n6lvrb4p842k8n2-glibc-2.38-27/lib/libc.so.6
++catch syscall exit_group
+Catchpoint 9 (syscall 'exit_group' [252])
++c
+
+Breakpoint 7, 0xf7c3e3a0 in getenv () from /nix/store/qcssalnxr02k3fyr3n6lvrb4p842k8n2-glibc-2.38-27/lib/libc.so.6
++info threads
+  Id   Target Id               Frame 
+* 1    process 2758441 ".wine" 0xf7c3e3a0 in getenv () from /nix/store/qcssalnxr02k3fyr3n6lvrb4p842k8n2-glibc-2.38-27/lib/libc.so.6
++catch syscall exit_group
+Catchpoint 10 (syscall 'exit_group' [252])
++printf "%s\n", $eax
+HOME
++c
+
+Breakpoint 7, 0xf7c3e3a0 in getenv () from /nix/store/qcssalnxr02k3fyr3n6lvrb4p842k8n2-glibc-2.38-27/lib/libc.so.6
++info threads
+  Id   Target Id               Frame 
+* 1    process 2758441 ".wine" 0xf7c3e3a0 in getenv () from /nix/store/qcssalnxr02k3fyr3n6lvrb4p842k8n2-glibc-2.38-27/lib/libc.so.6
++printf "%s\n", $eax
+USER
++c
+
+Breakpoint 7, 0xf7c3e3a0 in getenv () from /nix/store/qcssalnxr02k3fyr3n6lvrb4p842k8n2-glibc-2.38-27/lib/libc.so.6
++info threads
+  Id   Target Id               Frame 
+* 1    process 2758441 ".wine" 0xf7c3e3a0 in getenv () from /nix/store/qcssalnxr02k3fyr3n6lvrb4p842k8n2-glibc-2.38-27/lib/libc.so.6
++printf "%s\n", $eax
+WINEPREFIX
++c
+
+Breakpoint 7, 0xf7c3e3a0 in getenv () from /nix/store/qcssalnxr02k3fyr3n6lvrb4p842k8n2-glibc-2.38-27/lib/libc.so.6
++info threads
+  Id   Target Id               Frame 
+* 1    process 2758441 ".wine" 0xf7c3e3a0 in getenv () from /nix/store/qcssalnxr02k3fyr3n6lvrb4p842k8n2-glibc-2.38-27/lib/libc.so.6
++printf "%s\n", $eax
+WINELOADERNOEXEC
++c
+
+Breakpoint 1, 0xf7ce37b0 in execv () from /nix/store/qcssalnxr02k3fyr3n6lvrb4p842k8n2-glibc-2.38-27/lib/libc.so.6
++printf "%s\n", $eax
+wine-preloader
++info threads
+  Id   Target Id               Frame 
+* 1    process 2758441 ".wine" 0xf7ce37b0 in execv () from /nix/store/qcssalnxr02k3fyr3n6lvrb4p842k8n2-glibc-2.38-27/lib/libc.so.6
++catch syscall group:process
+Catchpoint 11 (syscalls 'exit' [1] 'fork' [2] 'waitpid' [7] 'execve' [11] 'kill' [37] 'wait4' [114] 'clone' [120] 'rt_sigqueueinfo' [178] 'vfork' [190] 'tkill' [238] 'exit_group' [252] 'tgkill' [270] 'waitid' [284] 'rt_tgsigqueueinfo' [335] 'execveat' [358] 'pidfd_send_signal' [424] 'clone3' [435])
++c
+
+Catchpoint 11 (call to syscall execve), 0xf7fc7589 in __kernel_vsyscall ()
++printf "ebx = %s\n", $ebx
+ebx = /nix/store/fa1fn9p561cy7nlzvdgmkgzpy20fxcm5-wine-9.0/bin/wine-preloader
++info threads
+  Id   Target Id               Frame 
+* 1    process 2758441 ".wine" 0xf7fc7589 in __kernel_vsyscall ()
++info inferiors
+  Num  Description       Connection           Executable        
+* 1    process 2758441   1 (native)           /nix/store/fa1fn9p561cy7nlzvdgmkgzpy20fxcm5-wine-9.0/bin/.wine 
++catch syscall group:process
+Catchpoint 12 (syscalls 'exit' [1] 'fork' [2] 'waitpid' [7] 'execve' [11] 'kill' [37] 'wait4' [114] 'clone' [120] 'rt_sigqueueinfo' [178] 'vfork' [190] 'tkill' [238] 'exit_group' [252] 'tgkill' [270] 'waitid' [284] 'rt_tgsigqueueinfo' [335] 'execveat' [358] 'pidfd_send_signal' [424] 'clone3' [435])
++printf "FIXME no breaks before exit\n"
+FIXME no breaks before exit
++c
+process 2758441 is executing new program: /nix/store/fa1fn9p561cy7nlzvdgmkgzpy20fxcm5-wine-9.0/bin/wine-preloader
+[New inferior 2]
+[New process 2758441]
+wine: '/var/empty' is not owned by you
+[Inferior 2 (process 2758441) exited with code 01]
