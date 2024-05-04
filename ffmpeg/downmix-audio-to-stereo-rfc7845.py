@@ -50,7 +50,24 @@ def get_coefficients_for_downmix_to_stereo(
             FR = dict(FL=0, FC=center*n, FR=sides*n),
         )
 
-    if input_channel_layout in ("quadraphonic", "4ch", "4.0"):
+    # note: 4ch is ambiguous: 3.1 or 4.0
+    # note: downmix formula for 3.1 channel layout is not specified in RFC7845
+    # this formula is based on the 3.0 formula
+    if input_channel_layout in ("3.1",):
+        # 3.1 Surround Mapping: L C R LFE
+        # left, center, right, LFE
+        # 3.0 with LFE
+        sides = 1
+        center = (1/sqrt(2)) * scale_center
+        lfe = (1/sqrt(2)) * scale_lfe
+        n = 1/(sides + center + lfe)
+        return dict(
+            FL = dict(FL=sides*n, FC=center*n, FR=0, LFE=lfe*n),
+            FR = dict(FL=0, FC=center*n, FR=sides*n, LFE=lfe*n),
+        )
+
+    # note: 4ch is ambiguous: 3.1 or 4.0
+    if input_channel_layout in ("quadraphonic", "4.0"):
         # Quadraphonic Channel Mapping: FL FR RL RR
         # front left, front right, rear left, rear right
         front = 1 * scale_front
@@ -61,6 +78,12 @@ def get_coefficients_for_downmix_to_stereo(
             FL = dict(FL=front*n, FR=0, BL=side1*n, BR=side2*n),
             FR = dict(FL=0, FR=front*n, BL=side2*n, BR=side1*n),
         )
+
+    # RFC7845:
+    # Matrices for 3 and 4 channels are normalized so
+    # each coefficient row sums to 1 to avoid clipping.  For 5 or more
+    # channels, they are normalized to 2 as a compromise between clipping
+    # and dynamic range reduction.
 
     if input_channel_layout in ("5.0", "5ch"):
         # 5.0 Surround Mapping: FL FC FR RL RR
