@@ -10,6 +10,8 @@
 
 # https://mediaarea.net/AudioChannelLayout # speaker positions
 
+# mpv-downmix-gui/src/mpv_downmix_gui/downmix_rfc7845.py
+
 # test:
 # for L in 3.0 4.0 5.0 5.1 6.1 7.1; do echo; echo $L; ./downmix-audio-to-stereo-rfc7845.py $L; done
 
@@ -50,16 +52,38 @@ def get_coefficients_for_downmix_to_stereo(
             FR = dict(FL=0, FC=center*n, FR=sides*n),
         )
 
+    # TODO verify downmix 3.1 to stereo
     # note: 4ch is ambiguous: 3.1 or 4.0
     # note: downmix formula for 3.1 channel layout is not specified in RFC7845
-    # this formula is based on the 3.0 formula
     if input_channel_layout in ("3.1",):
         # 3.1 Surround Mapping: L C R LFE
         # left, center, right, LFE
         # 3.0 with LFE
+        """
+        # based on the 3.0 formula
         sides = 1
         center = (1/sqrt(2)) * scale_center
         lfe = (1/sqrt(2)) * scale_lfe
+        n = 1/(sides + center + lfe)
+        """
+        # based on one example...
+        # Lammbock.2001.German.720p.BluRay.x264-SPiCY/spy-lammbock-720p.mkv
+        # for this movie, i find only 3.1 or 2.0 releases
+        # so probably the source has 3.1 audio
+        # pan=stereo|FL=0.22058823529411767*FL+0.11029411764705883*FC+0.0*FR+0.5*LFE|FR=0.0*FL+0.11029411764705883*FC+0.22058823529411767*FR+0.5*LFE
+        # -> music too loud, dialog too quiet
+        # music is in FL + FR, dialog is in FC -> make FC louder
+        # 0.5 + 1.0 + 0.5
+        #       1.0
+        # pan=stereo|FL=0.5*FL+0.5*FC+0.0*FR+0.5*LFE|FR=0.0*FL+0.5*FC+0.5*FR+0.5*LFE
+        # -> could be more bass
+        # 0.25 + 0.5 + 0.25
+        #        1.0
+        # pan=stereo|FL=0.25*FL+0.25*FC+0.0*FR+0.5*LFE|FR=0.0*FL+0.25*FC+0.25*FR+0.5*LFE
+        # -> sounds good
+        sides = 1
+        center = 1
+        lfe = 2
         n = 1/(sides + center + lfe)
         return dict(
             FL = dict(FL=sides*n, FC=center*n, FR=0, LFE=lfe*n),
@@ -99,7 +123,7 @@ def get_coefficients_for_downmix_to_stereo(
             FR = dict(FL=0, FC=center*n, FR=front*n, BL=side2*n, BR=side1*n),
         )
 
-    if input_channel_layout in ("5.1", "6ch"):
+    if input_channel_layout in ("5.1", "5.1(side)", "6ch"):
         # 5.1 Surround Mapping: FL FC FR RL RR LFE
         # front left, front center, front right, rear left, rear right, LFE
         front = 1 * scale_front
