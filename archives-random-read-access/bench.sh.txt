@@ -1,0 +1,61 @@
+$ cd $(mktemp -d -p /run/user/$UID)
+
+$ df -h $PWD
+Filesystem      Size  Used Avail Use% Mounted on
+tmpfs            12G  699M   12G   6% /run/user/1000
+
+$ mkdir pkg
+
+$ time for i in {0..9}; do head -c$((10*1024*1024)) /dev/urandom >pkg/file$i.bin; done
+
+real    0m2.113s
+user    0m0.080s
+sys     0m1.957s
+
+$ time zip -0 -q -r pkg.level0.zip pkg/
+
+real    0m1.523s
+user    0m1.147s
+sys     0m0.294s
+
+$ time tar cf pkg.tar.gz pkg
+
+real    0m0.275s
+user    0m0.032s
+sys     0m0.233s
+
+$ du -sh *
+100M    pkg
+101M    pkg.tar.gz
+101M    pkg.level0.zip
+
+$ rm -rf pkg
+
+$ time unzip -q pkg.level0.zip pkg/file9.bin
+
+real    0m0.266s
+user    0m0.223s
+sys     0m0.039s
+
+$ ls pkg
+file9.bin
+
+$ rm -rf pkg
+
+$ time tar xf pkg.tar.gz -- pkg/file9.bin
+
+real    0m0.041s
+user    0m0.005s
+sys     0m0.028s
+
+$ ls pkg
+file9.bin
+
+$ rm -rf pkg
+
+$ ./pkg.py
+output_db_path 'pkg.db'
+done pkg.db -- last_file_id is 10
+
+$ ./pkg.py read 10
+extracted file pkg/file9.bin (b'k\x92g\xa0\x05\x1d)\xdes\x0f'...) in 0.050516605377197266 seconds
