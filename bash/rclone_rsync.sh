@@ -41,6 +41,10 @@ function rclone_rsync() {
         local loc_rest="${loc##*:}"
 
         if [ "$ssh_remote" != "$loc" ] && [ -n "$ssh_remote" ]; then
+          if [ "${ssh_remote: -1}" = ":" ]; then
+            echo "error: rclone does not support the rsync protocol (HOST::PATH). see https://github.com/rclone/rclone/issues/2092"
+            return 1
+          fi
           echo "found ssh_remote ${ssh_remote@Q} with loc_rest ${loc_rest@Q}" # debug
           # get ssh config
           while IFS=" " read -r key val; do
