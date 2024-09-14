@@ -83,12 +83,18 @@ function rclone_rsync() {
   # --config /dev/null is needed
   # so rclone does not add this config to ~/.config/rclone/rclone.conf
 
-  rclone \
-    --config /dev/null \
-    $subcmd \
-    "${args[@]}" \
-    "$src" \
+  args=(
+    rclone
+    --config /dev/null
+    $subcmd
+    "${args[@]}"
+    "$src"
     "$dst"
+  )
+
+  printf ">"; printf " %q" "${args[@]}"; printf "\n" # debug
+
+  "${args[@]}"
 }
 
 
