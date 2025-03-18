@@ -17,7 +17,7 @@ set -eux
 # fixme this script requires
 # other scripts in $d
 # but should be self contained
-d="$(dirname "$0")"
+d="$(dirname -- "$(readlink -f -- "$0")")"
 
 # todo parse options like "-ac 1"
 
