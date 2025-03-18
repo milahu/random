@@ -44,24 +44,29 @@ for i in "$@"
 do
 	echo "$i"
 	o="$i.sg.png" # output file
-	t=$(basename "$i") # title above spectrogram
-	c="spectrogram by SoX, the Sound eXchange tool" # comment below spectrogram
+	#t=$(basename "$i") # title above spectrogram
+	#c="spectrogram by SoX, the Sound eXchange tool" # comment below spectrogram
+
+	# fix: no space left on /tmp
+	temp="$i.soxtmp"
+	mkdir -p "$temp"
 
 sg_opts=""
 #sg_opts+=" -r" # Raw spectrogram: suppress the display of axes and legends.
 #sg_opts+=" -a" # Suppress the display of the axis lines. This is sometimes useful in helping to discern artefacts at the spectrogram edges.
 
-sg_opts+=" -x 1080" # max width
+#sg_opts+=" -x 1080" # max width
 #sg_opts+=" -X 100" # time resolution (pixels per second)
 #sg_opts+=" -y 720" # relative height
-sg_opts+=" -Y 720" # target total height
-sg_opts+=" -z 100" # z-axis range in dB
+#sg_opts+=" -Y 720" # target total height
+#sg_opts+=" -z 100" # z-axis range in dB
 
 	# try to read original format
 	echo analyze
 	sox "$i" -n \
 		$sx_args \
-		spectrogram -o "$o" $sg_opts \
+		--temp "$temp" \
+		spectrogram -o "$o" -c "" $sg_opts \
 		2>&1 | grep -v "no handler for detected file type"
 
 		#spectrogram -o "$o" -c "$c" -t "$t" $sg_opts \
@@ -96,12 +101,17 @@ sg_opts+=" -z 100" # z-axis range in dB
 		# bash "process substitution" magic
 		sox \
 			--type "$sx_type" \
+			--temp "$temp" \
 			--ignore-length \
 			<( ffmpeg -i "$i" $ff_args - ) \
 			--null \
 			$sx_args \
-			spectrogram -d "$d" -o "$o" -c "$c" -t "$t"
+			spectrogram -d "$d" -o "$o" -c "" $sg_opts
+
+			#spectrogram -d "$d" -o "$o" -c "$c" -t "$t"
 	fi
+
+	rm -rf "$temp"
 
 	echo -e "done\n$o\n"
 done
