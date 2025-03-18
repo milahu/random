@@ -39,9 +39,17 @@ sleep 1
 # downmix to stereo
 # todo handle noop case: input is stereo
 get_af="$d/downmix-audio-to-stereo-rfc7845.py"
-af=$("$get_af" "$acl")
-echo "af: ${af@Q}"
-sleep 1
+af=
+case "$acl" in
+  ""|mono|stereo)
+    :
+  ;;
+  *)
+    af=$("$get_af" "$acl")
+    echo "af: ${af@Q}"
+    sleep 1
+    ;;
+esac
 
 a=(
   ffmpeg
