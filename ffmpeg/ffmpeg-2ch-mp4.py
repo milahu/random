@@ -6,9 +6,6 @@ import os
 import time
 import json
 
-# Get the script directory
-d = os.path.dirname(os.path.realpath(__file__))
-
 # Function to get audio channel layout
 def get_audio_channel_layout(
         video_file,
@@ -16,8 +13,12 @@ def get_audio_channel_layout(
     ):
     # Run ffprobe to get information about the audio streams
     command = [
-        'ffprobe', '-v', 'error', '-select_streams', f'a:{audio_stream_index}', 
-        '-show_entries', 'stream=channel_layout', '-of', 'json', video_file
+        'ffprobe',
+        '-v', 'error',
+        '-select_streams', f'a:{audio_stream_index}', 
+        '-show_entries', 'stream=channel_layout',
+        '-of', 'json',
+        video_file
     ]
     
     try:
@@ -46,17 +47,6 @@ def get_audio_channel_layout(
         return None
 
 
-"""
-# Function to downmix audio to stereo
-def downmix_audio_to_stereo(acl):
-    get_af_script = os.path.join(d, 'downmix-audio-to-stereo-rfc7845.py')
-    result = subprocess.run([get_af_script, acl], capture_output=True, text=True)
-    return result.stdout.strip()
-"""
-
-
-
-#!/usr/bin/env python3
 
 # downmix-audio-to-stereo-rfc7845.py
 
@@ -234,6 +224,8 @@ def get_coefficients_for_downmix_to_stereo(
 
 def get_ffmpeg_audio_filter_for_downmix_to_stereo(input_channel_layout, **kwargs):
         coefficients = get_coefficients_for_downmix_to_stereo(input_channel_layout, **kwargs)
+        if coefficients is None:
+            return ""
         return "pan=stereo|" + "|".join(map(lambda kv: kv[0] + "=" + "+".join(map(lambda kv2: f"{kv2[1]}*{kv2[0]}", kv[1].items())), coefficients.items()))
 
 
@@ -249,7 +241,7 @@ def process_video_file(i):
     # Downmix to stereo if necessary
     af = ""
     if acl not in ("", "mono", "stereo"):
-        af = get_coefficients_for_downmix_to_stereo(acl)
+        af = get_ffmpeg_audio_filter_for_downmix_to_stereo(acl)
         print(f"af: {af}")
         time.sleep(1)
 
