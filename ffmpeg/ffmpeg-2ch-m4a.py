@@ -221,6 +221,7 @@ class VideoProcessor:
         self.ss = args.ss
         self.to = args.to
         self.t = args.t
+        self.wav = args.wav
         self.afilters = []
 
     def get_audio_channel_layout(self):
@@ -357,7 +358,11 @@ class VideoProcessor:
 
     def process_video(self):
         """ Process video with the selected filters and options. """
-        output_file = f"{self.input_file}.2ch.m4a"
+        if self.wav:
+          output_ext = "wav"
+        else:
+          output_ext = "m4a"
+        output_file = f"{self.input_file}.2ch.{output_ext}"
         afilter = self.get_ffmpeg_audio_filter()
 
         command = [
@@ -365,11 +370,16 @@ class VideoProcessor:
             "-hide_banner",
             "-nostdin",
             "-i", self.input_file,
-            "-c:a", "aac",
             "-map", f"0:a:{self.audio_stream_index}",
             "-map_metadata", "0",
             "-movflags", "faststart",
         ]
+        if self.wav:
+          pass
+        else:
+          command += [
+            "-c:a", "aac",
+          ]
         if self.ss:
           command += [
             "-ss", self.ss
@@ -412,6 +422,7 @@ if __name__ == "__main__":
     parser.add_argument("--ss", type=str, help="start position")
     parser.add_argument("--to", type=str, help="end position")
     parser.add_argument("--t", type=str, help="output duration")
+    parser.add_argument("--wav", action="store_true", help="produce wav file")
 
     args = parser.parse_args()
     
