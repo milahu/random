@@ -223,6 +223,7 @@ class VideoProcessor:
         self.t = args.t
         self.wav = args.wav
         self.afilters = []
+        self.t1 = time.time()
 
     def get_audio_channel_layout(self):
         """ Retrieve the audio channel layout using ffprobe. """
@@ -362,7 +363,7 @@ class VideoProcessor:
           output_ext = "wav"
         else:
           output_ext = "m4a"
-        output_file = f"{self.input_file}.2ch.{output_ext}"
+        output_file = f"{self.input_file}.{self.audio_stream_index}.2ch.{output_ext}"
         afilter = self.get_ffmpeg_audio_filter()
 
         command = [
@@ -375,6 +376,7 @@ class VideoProcessor:
             "-movflags", "faststart",
         ]
         if self.wav:
+          # default: pcm_s16le
           pass
         else:
           command += [
@@ -409,8 +411,10 @@ class VideoProcessor:
         ]
 
         print(f"Executing command:\n{shlex.join(command)}")
-        subprocess.run(command, check=True)
         time.sleep(3)
+        subprocess.run(command, check=True)
+        dt = time.time() - self.t1
+        print(f"done {output_file!r} in {dt} seconds")
 
 
 if __name__ == "__main__":
