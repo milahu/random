@@ -223,6 +223,7 @@ class VideoProcessor:
         result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         if result.returncode != 0:
             print(f"Error getting audio layout: {result.stderr}")
+            time.sleep(3)
             return None
 
         data = json.loads(result.stdout)
@@ -344,16 +345,18 @@ class VideoProcessor:
         if afilter:
             print(f"Applying audio filter: {afilter}")
             command.extend(["-af", afilter])
+            time.sleep(3)
 
         command.extend(["-y", output_file])
 
         print(f"Executing command:\n{shlex.join(command)}")
         subprocess.run(command, check=True)
+        time.sleep(3)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process video audio with downmix and loudnorm filtering.")
-    parser.add_argument("input_file", help="Path to the input video file", required=True)
+    parser.add_argument("input_file", help="Path to the input video file")
     parser.add_argument("--audio-stream-index", type=int, default=0, help="Audio stream index to process")
     parser.add_argument("--slow", action="store_true", help="Limit CPU usage to 1 core")
     parser.add_argument("--dst-fps", type=str, default="24000/1001", help="Set the destination frame rate")
