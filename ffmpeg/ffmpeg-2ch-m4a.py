@@ -295,8 +295,13 @@ class VideoProcessor:
 
             print(line)  # Show progress output
 
-            if not found_loudnorm and line.startswith("[Parsed_loudnorm_0"):
+            if not found_loudnorm and line.startswith("[Parsed_loudnorm_"):
                 found_loudnorm = True
+                # todo parse stream id
+                # Parsed_loudnorm_0
+                # Parsed_loudnorm_1
+                # Parsed_loudnorm_2
+                # ...
 
             if not found_json and line == "{":
                 found_json = True
