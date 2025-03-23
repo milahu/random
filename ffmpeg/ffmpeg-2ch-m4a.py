@@ -69,18 +69,18 @@ class VideoProcessor:
             if found_loudnorm and found_json:
                 loudnorm_json_lines.append(line)
 
-            if line == "}":
+            if found_json and line == "}":
                 found_json = False
                 found_loudnorm = False
 
-        proc.communicate()  # Ensure full process completion
+        # todo remove?
+        proc.communicate()
 
         if proc.returncode != 0:
-            print(f"Error: ffmpeg first pass failed with exit code {proc.returncode}")
-            return None
+            raise Exception(f"Error: ffmpeg first pass failed with exit code {proc.returncode}")
 
         if not loudnorm_json_lines:
-            print("Error: Could not extract loudnorm JSON data.")
+            raise Exception("Error: Could not extract loudnorm JSON data.")
             return None
 
         loudnorm_json_str = "\n".join(loudnorm_json_lines)
@@ -142,7 +142,7 @@ class VideoProcessor:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process video audio with downmix and loudnorm filtering.")
-    parser.add_argument("input_file", help="Path to the input video file")
+    parser.add_argument("input_file", help="Path to the input video file", required=True)
     parser.add_argument("--audio-stream-index", type=int, default=0, help="Audio stream index to process")
     parser.add_argument("--slow", action="store_true", help="Limit CPU usage to 1 core")
     parser.add_argument("--dst-fps", type=str, default="24000/1001", help="Set the destination frame rate")
