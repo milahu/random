@@ -1,162 +1,146 @@
-#!/usr/bin/env python3
-
 import subprocess
-import sys
 import json
-import re
+import shlex
 import argparse
-from fractions import Fraction
-from math import sqrt
 
-# Function to parse command-line arguments
-def parse_arguments():
-    parser = argparse.ArgumentParser(description="Two-pass volume normalization with optional downmixing for stereo output.")
-    parser.add_argument("input_files", nargs="+", help="Input video files.")
-    parser.add_argument("-a", "--audio-stream", type=int, default=0, help="Specify the audio stream index (default: 0).")
-    parser.add_argument("-d", "--debug", action="store_true", help="Enable debug mode for detailed logs.")
-    parser.add_argument("--slow", action="store_true", help="Limit FFmpeg to 1 CPU core for lower system load.")
-    parser.add_argument("--dst-fps", type=str, default="24000/1001", help="Set destination frame rate (default: 24000/1001 ~ 23.976).")
-    return parser.parse_args()
+class VideoProcessor:
+    def __init__(self, args):
+        self.input_file = args.input_file
+        self.audio_stream_index = args.audio_stream_index
+        self.slow = args.slow
+        self.dst_fps = args.dst_fps
+        self.afilters = []
 
-# Function to get the source framerate using ffprobe
-def get_source_fps(video_file):
-    command = [
-        'ffprobe', '-v', 'error',
-        '-select_streams', 'v:0',
-        '-show_entries', 'stream=r_frame_rate',
-        '-of', 'csv=p=0', video_file
-    ]
-    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    try:
-        return float(Fraction(result.stdout.strip())) if result.stdout.strip() else None
-    except ValueError:
-        return None
+    def get_audio_channel_layout(self):
+        """ Retrieve the audio channel layout using ffprobe. """
+        command = [
+            "ffprobe",
+            "-v", "error",
+            "-select_streams", f"a:{self.audio_stream_index}",
+            "-show_entries", "stream=channel_layout",
+            "-of", "json",
+            self.input_file,
+        ]
 
-# Function to get audio channel layout
-def get_audio_channel_layout(video_file, audio_stream_index=0):
-    command = [
-        'ffprobe', '-v', 'error',
-        '-select_streams', f'a:{audio_stream_index}',
-        '-show_entries', 'stream=channel_layout',
-        '-of', 'json', video_file
-    ]
-    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    try:
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if result.returncode != 0:
+            print(f"Error getting audio layout: {result.stderr}")
+            return None
+
         data = json.loads(result.stdout)
-        return data['streams'][0].get('channel_layout', None) if 'streams' in data and data['streams'] else None
-    except Exception:
+        if "streams" in data and len(data["streams"]) > 0:
+            return data["streams"][0].get("channel_layout")
+
         return None
 
-# Function to generate loudnorm filter
-def get_loudnorm_filter(loudnorm_json):
-    measured_I = loudnorm_json["input_i"]
+    def get_loudnorm_audio_filter(self):
+        """ Run the first pass of loudnorm filter and extract JSON parameters correctly. """
+        command = [
+            "ffmpeg",
+            "-hide_banner",
+            "-nostdin",
+            "-i", self.input_file,
+            "-af", "loudnorm=I=-23:TP=-1.5:LRA=11:print_format=json",
+            "-f", "null",
+            "-"
+        ]
 
-    if -25 <= measured_I <= -21:
-        return None  # Skip normalization if within acceptable range
+        print(f"Running first pass:\n{shlex.join(command)}")
 
-    return (f"loudnorm=I=-23:TP=-1.5:LRA=11:"
-            f"measured_I={measured_I}:measured_TP={loudnorm_json['input_tp']}:"
-            f"measured_LRA={loudnorm_json['input_lra']}:measured_thresh={loudnorm_json['input_thresh']}:"
-            f"offset={loudnorm_json['target_offset']}:linear=true:print_format=none")
+        proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 
-# Function to determine the FFmpeg audio filter chain
-def get_audio_filter_chain(input_channel_layout, loudnorm_json=None, atempo_factor=None):
-    filters = []
+        loudnorm_json_lines = []
+        capturing_json = False
 
-    if input_channel_layout not in ("mono", "1ch", "1.0", "stereo", "2ch", "2.0"):
-        filters.append("pan=stereo|FL=0.5*FL+0.5*FR|FR=0.5*FL+0.5*FR")
+        while proc.poll() is None:  # Loop while process is running
+            line = proc.stdout.readline().strip()
+            if not line:
+                continue
 
-    if loudnorm_json:
-        loudnorm_filter = get_loudnorm_filter(loudnorm_json)
-        if loudnorm_filter:
-            filters.append(loudnorm_filter)
+            if capturing_json:
+                loudnorm_json_lines.append(line)
+            else:
+                print(line)  # Show progress output
 
-    if atempo_factor and atempo_factor != 1.0:
-        filters.append(f"atempo={atempo_factor:.6f}")
+            if line == "{":
+                capturing_json = True
+                loudnorm_json_lines.append(line)
 
-    return ",".join(filters) if filters else None
+        proc.communicate()  # Ensure full process completion
 
-# Function to process the video file
-def process_video_file(input_file, audio_stream_index=0, dst_fps="24000/1001", debug=False, slow=False):
-    output_file = f"{input_file}.2ch.m4a"
+        if proc.returncode != 0:
+            print(f"Error: ffmpeg first pass failed with exit code {proc.returncode}")
+            return None
 
-    # Convert destination FPS to float
-    try:
-        dst_fps_float = float(Fraction(dst_fps))
-    except ValueError:
-        print(f"Error: Invalid destination FPS '{dst_fps}'. Skipping {input_file}.")
-        return
+        if not loudnorm_json_lines:
+            print("Error: Could not extract loudnorm JSON data.")
+            return None
 
-    # Get source FPS
-    src_fps = get_source_fps(input_file)
-    if not src_fps:
-        print(f"Error: Could not determine source FPS for {input_file}. Skipping.")
-        return
+        loudnorm_json_str = "\n".join(loudnorm_json_lines)
 
-    # Calculate atempo factor if needed
-    atempo_factor = None
-    if abs(src_fps - dst_fps_float) > 0.001:  # If FPS difference is significant
-        atempo_factor = src_fps / dst_fps_float
-        print(f"Adjusting audio tempo: source FPS = {src_fps}, target FPS = {dst_fps_float}, atempo = {atempo_factor:.6f}")
-
-    # Get audio channel layout
-    acl = get_audio_channel_layout(input_file, audio_stream_index)
-    if not acl:
-        print(f"Error: Could not determine audio layout for {input_file}. Skipping.")
-        return
-
-    # ** First pass: Get loudness stats **
-    first_pass_command = [
-        'ffmpeg', '-hide_banner', '-nostdin', '-i', input_file,
-        '-af', "loudnorm=I=-23:TP=-1.5:LRA=11:print_format=json",
-        '-f', 'null', '-'
-    ]
-    if slow:
-        first_pass_command.extend(['-threads', '1', '-filter_threads', '1'])
-    if debug:
-        print(f"Running first pass: {' '.join(first_pass_command)}")
-
-    result = subprocess.run(first_pass_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-
-    # Extract JSON from stderr
-    json_match = re.search(r'(\{(?:.|\n)*\})', result.stderr)
-    if json_match:
         try:
-            loudnorm_json = json.loads(json_match.group(1))
+            loudnorm_data = json.loads(loudnorm_json_str)
+            measured_i = float(loudnorm_data["input_i"])
+
+            # Apply loudnorm only if loudness is outside the -23 ±2 dB range
+            if not (-25 <= measured_i <= -21):
+                return f"loudnorm=I=-23:TP=-1.5:LRA=11:measured_I={loudnorm_data['input_i']}:measured_TP={loudnorm_data['input_tp']}:measured_LRA={loudnorm_data['input_lra']}:measured_thresh={loudnorm_data['input_thresh']}:offset={loudnorm_data['target_offset']}:linear=true:print_format=none"
+
         except json.JSONDecodeError:
-            print(f"Error: JSON decode failed for {input_file}. Skipping.")
-            return
-    else:
-        print(f"Error: Failed to extract loudnorm statistics for {input_file}. Skipping.")
-        return
+            print("Error: Invalid JSON format from loudnorm.")
 
-    # Generate the final audio filter chain
-    audio_filter_chain = get_audio_filter_chain(acl, loudnorm_json, atempo_factor)
+        return None
 
-    # Skip second pass if no processing is needed
-    if not audio_filter_chain:
-        print(f"Skipping {input_file}: Audio is already at correct loudness and stereo format.")
-        return
+    def get_ffmpeg_audio_filter(self):
+        """ Generate the audio filter chain. """
+        acl = self.get_audio_channel_layout()
 
-    # ** Second pass: Apply normalization if needed **
-    second_pass_command = [
-        'ffmpeg', '-hide_banner', '-nostdin', '-i', input_file,
-        '-c:a', 'aac',
-        '-map', f'0:a:{audio_stream_index}',
-        '-map_metadata', '0',
-        '-movflags', 'faststart',
-        '-af', audio_filter_chain,
-        '-y', output_file
-    ]
-    if slow:
-        second_pass_command.extend(['-threads', '1', '-filter_threads', '1'])
-    if debug:
-        print(f"Running second pass: {' '.join(second_pass_command)}")
+        if acl not in ("mono", "stereo"):
+            self.afilters.append("downmix=stereo")
 
-    subprocess.run(second_pass_command, check=True)
-    print(f"Processing complete: {output_file}")
+        loudnorm_filter = self.get_loudnorm_audio_filter()
+        if loudnorm_filter:
+            self.afilters.append(loudnorm_filter)
+
+        return ",".join(self.afilters) if self.afilters else None
+
+    def process_video(self):
+        """ Process video with the selected filters and options. """
+        output_file = f"{self.input_file}.2ch.m4a"
+        afilter = self.get_ffmpeg_audio_filter()
+
+        command = [
+            "ffmpeg",
+            "-hide_banner",
+            "-nostdin",
+            "-i", self.input_file,
+            "-c:a", "aac",
+            "-map", f"0:a:{self.audio_stream_index}",
+            "-map_metadata", "0",
+            "-movflags", "faststart",
+        ]
+
+        if self.slow:
+            command.extend(["-threads", "1", "-filter_threads", "1"])
+
+        if afilter:
+            print(f"Applying audio filter: {afilter}")
+            command.extend(["-af", afilter])
+
+        command.extend(["-y", output_file])
+
+        print(f"Executing command:\n{shlex.join(command)}")
+        subprocess.run(command, check=True)
+
 
 if __name__ == "__main__":
-    args = parse_arguments()
-    for filename in args.input_files:
-        process_video_file(filename, audio_stream_index=args.audio_stream, dst_fps=args.dst_fps, debug=args.debug, slow=args.slow)
+    parser = argparse.ArgumentParser(description="Process video audio with downmix and loudnorm filtering.")
+    parser.add_argument("input_file", help="Path to the input video file")
+    parser.add_argument("--audio-stream-index", type=int, default=0, help="Audio stream index to process")
+    parser.add_argument("--slow", action="store_true", help="Limit CPU usage to 1 core")
+    parser.add_argument("--dst-fps", type=str, default="24000/1001", help="Set the destination frame rate")
+
+    args = parser.parse_args()
+
+    processor = VideoProcessor(args)
+    processor.process_video()
