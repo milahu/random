@@ -244,7 +244,6 @@ class VideoProcessor:
             "-hide_banner",
             "-nostdin",
             "-i", self.input_file,
-            *af_args,
             "-af", af,
             "-f", "null",
             "-"
