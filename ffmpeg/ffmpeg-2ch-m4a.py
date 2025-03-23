@@ -2,6 +2,7 @@ import subprocess
 import json
 import shlex
 import argparse
+import time
 
 
 # downmix-audio-to-stereo-rfc7845.py
@@ -185,7 +186,19 @@ def get_ffmpeg_audio_filter_for_downmix_to_stereo(input_channel_layout, **kwargs
         return "pan=stereo|" + "|".join(map(lambda kv: kv[0] + "=" + "+".join(map(lambda kv2: f"{kv2[1]}*{kv2[0]}", kv[1].items())), coefficients.items()))
 
 
-
+def format_loudnorm_af(d):
+  return ":".join(
+    f"loudnorm=I=-23",
+    "TP=-1.5",
+    "LRA=11",
+    f"measured_I={d['input_i']}",
+    f"measured_TP={d['input_tp']}",
+    f"measured_LRA={d['input_lra']}",
+    f"measured_thresh={d['input_thresh']}",
+    f"offset={d['target_offset']}",
+    f"linear=true",
+    f"print_format=none"
+  )
 
 
 class VideoProcessor:
@@ -220,17 +233,23 @@ class VideoProcessor:
 
     def get_loudnorm_audio_filter(self):
         """ Run the first pass of loudnorm filter and extract JSON parameters correctly. """
+        af = ""
+        if self.downmix_af:
+          af += self.downmix_af + ","
+        af += "loudnorm=I=-23:TP=-1.5:LRA=11:print_format=json"
         command = [
             "ffmpeg",
             "-hide_banner",
             "-nostdin",
             "-i", self.input_file,
-            "-af", "loudnorm=I=-23:TP=-1.5:LRA=11:print_format=json",
+            *af_args,
+            "-af", af,
             "-f", "null",
             "-"
         ]
 
-        print(f"Running first pass:\n{shlex.join(command)}")
+        print(f"Running first loudnorm pass\n> {shlex.join(command)}")
+        time.sleep(3)
 
         proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 
@@ -276,20 +295,23 @@ class VideoProcessor:
 
             # Apply loudnorm only if loudness is outside the -23 ±2 dB range
             if not (-25 <= measured_i <= -21):
-                return f"loudnorm=I=-23:TP=-1.5:LRA=11:measured_I={loudnorm_data['input_i']}:measured_TP={loudnorm_data['input_tp']}:measured_LRA={loudnorm_data['input_lra']}:measured_thresh={loudnorm_data['input_thresh']}:offset={loudnorm_data['target_offset']}:linear=true:print_format=none"
+                return format_loudnorm_af(loudnorm_data)
 
         except json.JSONDecodeError:
-            print("Error: Invalid JSON format from loudnorm.")
+            print(f"failed to parse json string {loudnorm_json_str!r}")
+            raise Exception("Error: Invalid JSON format from loudnorm.")
 
         return None
 
     def get_ffmpeg_audio_filter(self):
         """ Generate the audio filter chain. """
         acl = self.get_audio_channel_layout()
+        
+        self.downmix_af = None
 
         if acl not in ("", "mono", "stereo"):
-            af = get_ffmpeg_audio_filter_for_downmix_to_stereo(acl)
-            self.afilters.append(af)
+            self.downmix_af = get_ffmpeg_audio_filter_for_downmix_to_stereo(acl)
+            self.afilters.append(self.downmix_af)
 
         loudnorm_filter = self.get_loudnorm_audio_filter()
         if loudnorm_filter:
@@ -314,7 +336,10 @@ class VideoProcessor:
         ]
 
         if self.slow:
-            command.extend(["-threads", "1"])  # Removed "-filter_threads 1"
+            # limit cpu usage
+            command += [
+              "-threads", "1",
+            ]
 
         if afilter:
             print(f"Applying audio filter: {afilter}")
