@@ -50,21 +50,28 @@ class VideoProcessor:
         proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 
         loudnorm_json_lines = []
-        capturing_json = False
+        found_loudnorm = False
+        found_json = False
 
         while proc.poll() is None:  # Loop while process is running
             line = proc.stdout.readline().strip()
             if not line:
                 continue
 
-            if capturing_json:
-                loudnorm_json_lines.append(line)
-            else:
-                print(line)  # Show progress output
+            print(line)  # Show progress output
 
-            if line == "{":
-                capturing_json = True
+            if not found_loudnorm and line.startswith("[Parsed_loudnorm_0"):
+                found_loudnorm = True
+
+            if not found_json and line == "{":
+                found_json = True
+
+            if found_loudnorm and found_json:
                 loudnorm_json_lines.append(line)
+
+            if line == "}":
+                found_json = False
+                found_loudnorm = False
 
         proc.communicate()  # Ensure full process completion
 
