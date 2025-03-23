@@ -121,7 +121,7 @@ class VideoProcessor:
         ]
 
         if self.slow:
-            command.extend(["-threads", "1", "-filter_threads", "1"])
+            command.extend(["-threads", "1"])  # Removed "-filter_threads 1"
 
         if afilter:
             print(f"Applying audio filter: {afilter}")
