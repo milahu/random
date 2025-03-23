@@ -197,7 +197,7 @@ def get_ffmpeg_audio_filter_for_downmix_to_stereo(input_channel_layout, **kwargs
 
 
 def format_loudnorm_af(d):
-  return ":".join(
+  return ":".join([
     f"loudnorm=I=-23",
     "TP=-1.5",
     "LRA=11",
@@ -208,7 +208,7 @@ def format_loudnorm_af(d):
     f"offset={d['target_offset']}",
     f"linear=true",
     f"print_format=none"
-  )
+  ])
 
 
 class VideoProcessor:
