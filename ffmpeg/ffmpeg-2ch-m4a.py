@@ -6,6 +6,15 @@ import time
 import os
 
 
+
+# todo add arg --to
+
+# todo parse ffmpeg progress output
+# todo make ffmpeg show progress less often
+
+
+
+
 # downmix-audio-to-stereo-rfc7845.py
 
 # https://superuser.com/a/1616102/951886
@@ -204,10 +213,14 @@ def format_loudnorm_af(d):
 
 class VideoProcessor:
     def __init__(self, args):
+        self.args = args
         self.input_file = args.input_file
         self.audio_stream_index = args.audio_stream_index
         self.slow = args.slow
         self.dst_fps = args.dst_fps
+        self.ss = args.ss
+        self.to = args.to
+        self.t = args.t
         self.afilters = []
 
     def get_audio_channel_layout(self):
@@ -246,8 +259,25 @@ class VideoProcessor:
             "-i", self.input_file,
             "-af", af,
             "-f", "null",
-            "-"
         ]
+        if self.ss:
+          command += [
+            "-ss", self.ss
+          ]
+        if self.to:
+          command += [
+            "-to", self.to
+          ]
+        if self.t:
+          command += [
+            "-t", self.t
+          ]
+        if self.slow:
+            # limit cpu usage
+            command += [
+              "-threads", "1",
+            ]
+        command += ["-"]
 
         print(f"Running first loudnorm pass\n> {shlex.join(command)}")
         time.sleep(3)
@@ -335,19 +365,33 @@ class VideoProcessor:
             "-map_metadata", "0",
             "-movflags", "faststart",
         ]
-
+        if self.ss:
+          command += [
+            "-ss", self.ss
+          ]
+        if self.to:
+          command += [
+            "-to", self.to
+          ]
+        if self.t:
+          command += [
+            "-t", self.t
+          ]
         if self.slow:
             # limit cpu usage
             command += [
               "-threads", "1",
             ]
-
         if afilter:
             print(f"Applying audio filter: {afilter}")
-            command.extend(["-af", afilter])
+            command += [
+              "-af", afilter
+            ]
             time.sleep(3)
-
-        command.extend(["-y", output_file])
+        command += [
+          "-y",
+          output_file
+        ]
 
         print(f"Executing command:\n{shlex.join(command)}")
         subprocess.run(command, check=True)
@@ -360,6 +404,9 @@ if __name__ == "__main__":
     parser.add_argument("--audio-stream-index", type=int, default=0, help="Audio stream index to process")
     parser.add_argument("--slow", action="store_true", help="Limit CPU usage to 1 core")
     parser.add_argument("--dst-fps", type=str, default="24000/1001", help="Set the destination frame rate")
+    parser.add_argument("--ss", type=str, help="start position")
+    parser.add_argument("--to", type=str, help="end position")
+    parser.add_argument("--t", type=str, help="output duration")
 
     args = parser.parse_args()
     
