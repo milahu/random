@@ -213,10 +213,13 @@ def format_loudnorm_af(d):
 
 class VideoProcessor:
     def __init__(self, args):
+        assert shutil.which("ffmpeg")
         self.args = args
         self.input_file = args.input_file
         self.audio_stream_index = args.audio_stream_index
         self.slow = args.slow
+        if self.slow:
+            assert shutil.which("cpulimit")
         self.dst_fps = args.dst_fps
         self.ss = args.ss
         self.to = args.to
@@ -255,7 +258,17 @@ class VideoProcessor:
         if self.downmix_af:
           af += self.downmix_af + ","
         af += "loudnorm=I=-23:TP=-1.5:LRA=11:print_format=json"
-        command = [
+        
+        command = []
+        
+        if self.slow:
+            command += [
+                "cpulimit",
+                "--limit=100",
+                "--include-children",
+            ]
+
+        command += [
             "ffmpeg",
             "-hide_banner",
             "-nostdin",
@@ -369,7 +382,16 @@ class VideoProcessor:
         output_file = f"{self.input_file}.{self.audio_stream_index}.2ch.{output_ext}"
         afilter = self.get_ffmpeg_audio_filter()
 
-        command = [
+        command = []
+        
+        if self.slow:
+            command += [
+                "cpulimit",
+                "--limit=100",
+                "--include-children",
+            ]
+
+        command += [
             "ffmpeg",
             "-hide_banner",
             "-nostdin",
@@ -387,6 +409,7 @@ class VideoProcessor:
           command += [
             # todo use fdk_aac or qaac
             "-c:a", "aac",
+            # https://superuser.com/questions/114915/aac-sample-rate-and-bit-rate-for-high-quality-audio#238998
             "-b:a", "256k",
           ]
         if self.ss:
@@ -403,6 +426,7 @@ class VideoProcessor:
           ]
         if self.slow:
             # limit cpu usage
+            # fixme high cpu load
             command += [
               "-threads", "1",
             ]
