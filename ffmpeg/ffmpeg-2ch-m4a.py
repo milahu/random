@@ -387,6 +387,7 @@ class VideoProcessor:
           command += [
             # todo use fdk_aac or qaac
             "-c:a", "aac",
+            "-b:a", "256k",
           ]
         if self.ss:
           command += [
