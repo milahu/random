@@ -433,6 +433,8 @@ if __name__ == "__main__":
     parser.add_argument("--to", type=str, help="end position")
     parser.add_argument("--t", type=str, help="output duration")
     parser.add_argument("--flac", action="store_true", help="produce flac file")
+    # note: flac is better than wav
+    # Filesize 6815932518 invalid for wav, output file will be broken
     parser.add_argument("--wav", action="store_true", help="produce wav file")
 
     args = parser.parse_args()
