@@ -221,6 +221,7 @@ class VideoProcessor:
         self.ss = args.ss
         self.to = args.to
         self.t = args.t
+        self.flac = args.flac
         self.wav = args.wav
         self.afilters = []
         self.t1 = time.time()
@@ -359,7 +360,9 @@ class VideoProcessor:
 
     def process_video(self):
         """ Process video with the selected filters and options. """
-        if self.wav:
+        if self.flac:
+          output_ext = "flac"
+        elif self.wav:
           output_ext = "wav"
         else:
           output_ext = "m4a"
@@ -375,11 +378,14 @@ class VideoProcessor:
             "-map_metadata", "0",
             "-movflags", "faststart",
         ]
-        if self.wav:
+        if self.flac:
+          pass
+        elif self.wav:
           # default: pcm_s16le
           pass
         else:
           command += [
+            # todo use fdk_aac or qaac
             "-c:a", "aac",
           ]
         if self.ss:
@@ -426,6 +432,7 @@ if __name__ == "__main__":
     parser.add_argument("--ss", type=str, help="start position")
     parser.add_argument("--to", type=str, help="end position")
     parser.add_argument("--t", type=str, help="output duration")
+    parser.add_argument("--flac", action="store_true", help="produce flac file")
     parser.add_argument("--wav", action="store_true", help="produce wav file")
 
     args = parser.parse_args()
@@ -434,3 +441,34 @@ if __name__ == "__main__":
 
     processor = VideoProcessor(args)
     processor.process_video()
+
+r"""
+pass 1:
+speed=3x
+
+pass 2:
+size= 1561642KiB
+time=01:57:15.70
+bitrate=1818.3kbits/s
+speed=12.6x
+done 'x.mkv.0.2ch.flac' in 2806.6607785224915 seconds
+
+total:
+real    46m47.064s
+user    153m32.608s
+sys     7m36.345s
+
+
+
+size=116485KiB
+time=01:57:15.70
+bitrate= 135.6kbits/s
+speed= 8.4x
+[aac @ 0xb4000076817633d0] Qavg: 603.010
+done 'x.mkv.0.2ch.m4a' in 2038.131929397583 seconds
+
+real    33m58.566s
+user    164m48.518s
+sys     5m28.551s
+"""
+
