@@ -262,6 +262,7 @@ class VideoProcessor:
         command = []
         
         if self.slow:
+            # fix: ffmpeg loudnorm first pass ignores threads limit
             command += [
                 "cpulimit",
                 "--limit=100",
@@ -290,6 +291,7 @@ class VideoProcessor:
           ]
         if self.slow:
             # limit cpu usage
+            # no effect
             command += [
               "-threads", "1",
             ]
