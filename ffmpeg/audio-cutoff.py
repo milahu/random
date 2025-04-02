@@ -203,8 +203,8 @@ def get_lowpass_cutoff(input_file, start_time=None, end_time=None, plot_path=Non
     if not cutoff_values:
         raise ValueError("No valid audio chunks processed")
     
-    # Calculate final result using median
-    final_cutoff = np.median(cutoff_values) / 1000
+    # Calculate final result using MAXIMUM value  # <--- Only changed line
+    final_cutoff = np.max(cutoff_values) / 1000
     print(f"\nFinal lowpass cutoff frequency: {final_cutoff:.1f} kHz")
 
     # Generate plot
