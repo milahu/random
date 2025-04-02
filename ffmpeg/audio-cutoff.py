@@ -29,78 +29,95 @@ generally,
 try to use a streaming algorithm
 to reduce memory usage.
 """
+"""
+no, this still runs out of memory at
+```py
+stdout_data, stderr_data = proc.communicate()
+```
+please use a loop to read
+chunks of wav data from ffmpeg
+and process each chunk separately.
+feel free to use
+a different format than wav
+to make the code easier.
+"""
+
+#!/usr/bin/env python3
+
+# detect_lowpass.py
 
 import numpy as np
-from scipy.io import wavfile
+from scipy import signal
 import subprocess
 import sys
 import matplotlib.pyplot as plt
-from io import BytesIO
 
-def read_ffmpeg_output(m4a_file_path):
-    """Read audio data from ffmpeg stdout without temporary files"""
+def stream_audio_analysis(m4a_file_path, plot_path=None):
+    """Process audio in chunks using ffmpeg stdout streaming"""
+    # FFmpeg command for raw PCM output (no headers)
     ffmpeg_cmd = [
         'ffmpeg',
         '-i', m4a_file_path,
         '-ac', '1',          # mono
         '-ar', '44100',      # sample rate
-        '-f', 'wav',         # output format
-        '-'                  # output to stdout
+        '-f', 's16le',       # 16-bit little-endian PCM
+        '-'                   # output to stdout
     ]
-    
-    # Run ffmpeg and capture stdout
-    proc = subprocess.Popen(ffmpeg_cmd, 
-                          stdout=subprocess.PIPE,
-                          stderr=subprocess.PIPE)
-    
-    # Read WAV data from stdout
-    stdout_data, stderr_data = proc.communicate()
-    
-    if proc.returncode != 0:
-        raise RuntimeError(f"FFmpeg failed: {stderr_data.decode('utf-8')}")
-    
-    # Use BytesIO to make the bytes file-like for wavfile.read
-    wav_data = BytesIO(stdout_data)
-    sample_rate, audio_data = wavfile.read(wav_data)
-    
-    return sample_rate, audio_data
 
-def analyze_spectrum(audio_data, sample_rate, plot_path=None):
-    """Analyze audio spectrum and optionally save plot"""
-    # Normalize
-    audio_data = audio_data / np.max(np.abs(audio_data))
-    
-    # Compute FFT in chunks to reduce memory (streaming approach)
-    chunk_size = 44100 * 10  # 10 seconds at 44.1kHz
-    n_chunks = len(audio_data) // chunk_size
-    if n_chunks == 0:
-        n_chunks = 1
-        chunk_size = len(audio_data)
-    
+    # Start ffmpeg process
+    proc = subprocess.Popen(ffmpeg_cmd,
+      stdout=subprocess.PIPE,
+      stderr=subprocess.PIPE,
+      bufsize=10**8,
+    )
+
+    # Audio processing parameters
+    sample_rate = 44100
+    chunk_size = sample_rate * 10  # 10 seconds per chunk
+    bytes_per_sample = 2  # 16-bit = 2 bytes
     fft_sum = None
+    total_chunks = 0
     
-    for i in range(n_chunks):
-        start = i * chunk_size
-        end = start + chunk_size
-        chunk = audio_data[start:end]
-        
-        # Compute FFT for this chunk
-        fft_result = np.fft.rfft(chunk)
-        fft_mag = np.abs(fft_result)
-        
-        if fft_sum is None:
-            fft_sum = fft_mag
-        else:
-            fft_sum += fft_mag
+    try:
+        while True:
+            # Read raw PCM bytes in chunks
+            raw_bytes = proc.stdout.read(chunk_size * bytes_per_sample)
+            if not raw_bytes:
+                break
+
+            # Convert bytes to numpy array
+            chunk = np.frombuffer(raw_bytes, dtype=np.int16).astype(np.float32)
+            chunk /= 32768.0  # Normalize to [-1, 1]
+
+            # Process chunk
+            fft_result = np.fft.rfft(chunk * signal.windows.hann(len(chunk)))
+            fft_mag = np.abs(fft_result)
+
+            # print("fft_mag", fft_mag)
+
+            if fft_sum is None:
+                fft_sum = fft_mag
+                frequencies = np.fft.rfftfreq(len(chunk), d=1.0/sample_rate)
+            else:
+                fft_sum += fft_mag
+            total_chunks += 1
+            
+            # Early exit if we've processed enough data
+            # if total_chunks >= 6:  # ~60 seconds max
+            #     break
+
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=1)
+        except:
+            pass
+
+    # Calculate average FFT
+    fft_avg = fft_sum / total_chunks if total_chunks > 0 else np.zeros_like(fft_sum)
+    fft_db = 20 * np.log10(fft_avg + 1e-10)
     
-    # Average the FFT results
-    fft_magnitude = fft_sum / n_chunks
-    frequencies = np.fft.rfftfreq(chunk_size, d=1.0/sample_rate)
-    
-    # Convert to dB scale
-    fft_db = 20 * np.log10(fft_magnitude + 1e-10)
-    
-    # Find cutoff frequency (-3dB point)
+    # Find cutoff frequency
     peak_db = np.max(fft_db)
     target_db = peak_db - 3
     above_threshold = np.where(fft_db >= target_db)[0]
@@ -112,7 +129,7 @@ def analyze_spectrum(audio_data, sample_rate, plot_path=None):
     
     cutoff_khz = round(cutoff_freq / 500) * 0.5
     
-    # Save debug plot if requested
+    # Save plot if requested
     if plot_path:
         plt.figure(figsize=(10, 4))
         plt.semilogx(frequencies, fft_db)
@@ -130,20 +147,17 @@ def analyze_spectrum(audio_data, sample_rate, plot_path=None):
 
 def detect_lowpass_cutoff(m4a_file_path):
     """Main detection function"""
-    try:
-        sample_rate, audio_data = read_ffmpeg_output(m4a_file_path)
-        plot_path = f"{m4a_file_path}.debug-spectrum.png"
-        cutoff = analyze_spectrum(audio_data, sample_rate, plot_path)
-        return cutoff
-    except Exception as e:
-        print(f"Error processing file: {str(e)}", file=sys.stderr)
-        raise
+    plot_path = f"{m4a_file_path}.debug-spectrum.png"
+    return stream_audio_analysis(m4a_file_path, plot_path)
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Usage: python detect_lowpass.py <input.m4a>")
         sys.exit(1)
     
-    m4a_file = sys.argv[1]
-    cutoff = detect_lowpass_cutoff(m4a_file)
-    print(f"Estimated lowpass cutoff frequency: {cutoff:.1f} kHz")
+    try:
+        cutoff = detect_lowpass_cutoff(sys.argv[1])
+        print(f"Estimated lowpass cutoff frequency: {cutoff:.1f} kHz")
+    except Exception as e:
+        print(f"Error: {str(e)}", file=sys.stderr)
+        sys.exit(1)
