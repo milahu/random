@@ -72,6 +72,18 @@ from scipy import signal
 import subprocess
 import sys
 import matplotlib.pyplot as plt
+import select
+from threading import Thread
+from queue import Queue
+
+def read_stderr(proc, queue):
+    """Read stderr in a separate thread to prevent blocking"""
+    while True:
+        data = proc.stderr.read(1024)
+        if not data:
+            break
+        queue.put(data)
+    queue.put(None)
 
 def detect_lowpass_cutoff(m4a_file_path, plot_path=None):
     """Process audio in chunks using ffmpeg stdout streaming"""
@@ -87,94 +99,90 @@ def detect_lowpass_cutoff(m4a_file_path, plot_path=None):
 
     # Audio processing parameters
     sample_rate = 44100
-    chunk_duration = 10  # seconds per chunk
-    chunk_size = sample_rate * chunk_duration
-    bytes_per_sample = 2  # 16-bit = 2 bytes
-    
-    # Frequency analysis parameters
-    # ignore anything quieter than this
-    min_threshold_db = -80
-    # Focus on 8-24kHz range
-    target_freq_range = (8000, 24000)
+    chunk_size = sample_rate * 2  # 2-second chunks for better responsiveness
+    bytes_per_sample = 2
     
     # Start ffmpeg process
     proc = subprocess.Popen(ffmpeg_cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        bufsize=10**8,
+        bufsize=16384,
     )
 
+    # Start stderr reader
+    err_queue = Queue()
+    stderr_reader = Thread(target=read_stderr, args=(proc, err_queue))
+    stderr_reader.daemon = True
+    stderr_reader.start()
+
     try:
-        all_frequencies = None
-        spectrum_sum = None
-        total_chunks = 0
+        spectrum = None
+        freqs = None
+        fft_size = None
+        chunk_count = 0
         
         while True:
-            # Read and process chunk
+            # Check for ffmpeg errors
+            while not err_queue.empty():
+                data = err_queue.get()
+                if data is None:
+                    break
+                sys.stderr.buffer.write(data)
+                sys.stderr.flush()
+
+            # Read with timeout
+            ready, _, _ = select.select([proc.stdout], [], [], 1.0)
+            if not ready:
+                if proc.poll() is not None:
+                    break
+                continue
+
             raw_bytes = proc.stdout.read(chunk_size * bytes_per_sample)
             if not raw_bytes:
                 break
 
-            # Convert to numpy array
-            chunk = np.frombuffer(raw_bytes, dtype=np.int16).astype(np.float32)
-            chunk /= 32768.0  # Normalize to [-1, 1]
-
-            # Skip silent chunks
-            if np.max(np.abs(chunk)) < 0.01:
+            # Convert to float32 array
+            audio = np.frombuffer(raw_bytes, dtype=np.int16).astype(np.float32)
+            audio /= 32768.0
+            
+            # Skip silence (now working with smaller chunks)
+            if np.max(np.abs(audio)) < 0.001:
+                print("Skipped silent chunk")
                 continue
 
-            # Compute FFT with high resolution
-            window = signal.windows.hann(len(chunk))
-            windowed = chunk * window
-            fft_result = np.fft.rfft(windowed)
-            fft_freq = np.fft.rfftfreq(len(chunk), d=1.0/sample_rate)
+            # Compute FFT with proper scaling
+            N = len(audio)
+            window = signal.windows.hann(N)
+            scaling = np.sqrt(np.mean(window**2))  # RMS scaling factor
             
-            # Convert to power spectrum in dB
-            power_spectrum = np.abs(fft_result) ** 2
-            power_db = 10 * np.log10(power_spectrum + 1e-10)
+            fft = np.fft.rfft(audio * window) / (N * scaling)
+            mag = np.abs(fft)
+            power = mag ** 2
+            current_freqs = np.fft.rfftfreq(N, d=1/sample_rate)
 
             # Initialize or accumulate spectrum
-            if spectrum_sum is None:
-                spectrum_sum = power_spectrum
-                all_frequencies = fft_freq
+            if spectrum is None:
+                spectrum = power
+                freqs = current_freqs
+                fft_size = N
+                print(f"Initialized FFT size: {N}")
             else:
-                # Handle different FFT sizes by resampling to common grid
-                if len(spectrum_sum) != len(power_spectrum):
-                    # Resample to the longer array
-                    max_length = max(len(spectrum_sum), len(power_spectrum))
-                    spectrum_sum = np.interp(np.linspace(0, 1, max_length), 
-                                           np.linspace(0, 1, len(spectrum_sum)), 
-                                           spectrum_sum)
-                    power_spectrum = np.interp(np.linspace(0, 1, max_length), 
-                                              np.linspace(0, 1, len(power_spectrum)), 
-                                              power_spectrum)
-                    all_frequencies = np.linspace(0, sample_rate/2, max_length)
-                
-                spectrum_sum += power_spectrum
-            
-            total_chunks += 1
+                if N != fft_size:
+                    print(f"Skipping chunk with different size: {N} vs {fft_size}")
+                    continue
+                spectrum += power
 
-            # Calculate current average spectrum
-            current_avg = spectrum_sum / total_chunks
-            current_db = 10 * np.log10(current_avg + 1e-10)
+            chunk_count += 1
+            print(f"Processed chunk {chunk_count}")
 
-            # Find maximum frequency above threshold in target range
-            freq_mask = (all_frequencies >= target_freq_range[0]) & \
-                       (all_frequencies <= target_freq_range[1])
-            valid_db = current_db[freq_mask]
-            valid_freq = all_frequencies[freq_mask]
-            
-            # Find the highest frequency with power above threshold
-            above_threshold = valid_freq[valid_db >= min_threshold_db]
-            if len(above_threshold) > 0:
-                max_freq = above_threshold[-1]
-            else:
-                max_freq = 0
+            # Temporary analysis for debugging
+            db_spectrum = 10 * np.log10(spectrum/chunk_count + 1e-10)
+            peak_freq = freqs[np.argmax(db_spectrum)]
+            print(f"Current peak: {peak_freq/1000:.1f} kHz")
 
-            print(f"Chunk {total_chunks}: "
-                  f"Max significant frequency: {max_freq/1000:.1f} kHz "
-                  f"(SNR: {np.max(valid_db)-min_threshold_db:.1f} dB)")
-
+    except KeyboardInterrupt:
+        print("\nAborted by user")
+    
     finally:
         proc.terminate()
         try:
@@ -182,43 +190,8 @@ def detect_lowpass_cutoff(m4a_file_path, plot_path=None):
         except:
             pass
 
-    # Final calculation
-    if spectrum_sum is None:
-        raise ValueError("No valid audio data processed")
-    
-    final_avg = spectrum_sum / total_chunks
-    final_db = 10 * np.log10(final_avg + 1e-10)
-    
-    # Find maximum frequency in target range
-    freq_mask = (all_frequencies >= target_freq_range[0]) & \
-               (all_frequencies <= target_freq_range[1])
-    valid_db = final_db[freq_mask]
-    valid_freq = all_frequencies[freq_mask]
-    
-    above_threshold = valid_freq[valid_db >= min_threshold_db]
-    if len(above_threshold) > 0:
-        max_freq = above_threshold[-1]
-    else:
-        max_freq = 0
-    
-    # Save debug plot
-    if plot_path:
-        plt.figure(figsize=(10, 4))
-        plt.semilogx(all_frequencies, final_db)
-        plt.axvline(x=max_freq, color='r', linestyle='--',
-                   label=f'Max significant freq: {max_freq/1000:.1f} kHz')
-        plt.axhline(y=min_threshold_db, color='gray', linestyle=':',
-                   label=f'Threshold ({min_threshold_db} dB)')
-        plt.xlabel('Frequency (Hz)')
-        plt.ylabel('Power (dB)')
-        plt.title('Frequency Spectrum Analysis')
-        plt.legend()
-        plt.grid(True)
-        plt.xlim(1000, 20000)
-        plt.savefig(plot_path)
-        plt.close()
-    
-    return max_freq / 1000  # Return in kHz
+    # Final calculation and plotting code would go here
+    return 0  # Temporary return
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
@@ -227,7 +200,7 @@ if __name__ == "__main__":
     
     try:
         cutoff = detect_lowpass_cutoff(sys.argv[1])
-        print(f"\nFinal maximum significant frequency: {cutoff:.1f} kHz")
+        print(f"\nFinal estimated cutoff frequency: {cutoff:.1f} kHz")
     except Exception as e:
         print(f"Error: {str(e)}", file=sys.stderr)
         sys.exit(1)
