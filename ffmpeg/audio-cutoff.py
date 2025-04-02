@@ -105,10 +105,10 @@ import matplotlib.pyplot as plt
 from scipy import signal
 
 def process_chunk(audio, sample_rate, chunk_num):
-    """Process 10-second chunk and return cutoff frequency"""
-    # Apply window function and compute FFT
+    """Process 10-second audio chunk and return cutoff frequency estimate"""
+    # Apply window function
     window = signal.windows.hann(len(audio))
-    fft = np.fft.rfft(audio * window, n=len(audio)*4)
+    fft = np.fft.rfft(audio * window, n=len(audio)*4)  # 4x zero-padding
     freqs = np.fft.rfftfreq(len(audio)*4, d=1/sample_rate)
     db = 20 * np.log10(np.abs(fft) + 1e-10)
     
@@ -125,6 +125,7 @@ def process_chunk(audio, sample_rate, chunk_num):
     if len(target_db) == 0:
         return None
 
+    # Find peak and cutoff
     peak_idx = np.argmax(target_db)
     peak_db = target_db[peak_idx]
     cutoff_db = peak_db - rolloff_db
@@ -137,12 +138,12 @@ def process_chunk(audio, sample_rate, chunk_num):
     cutoff_freq = target_freqs[cutoff_idx]
     
     # Print intermediate result
-    print(f"Chunk {chunk_num}: Current cutoff estimate: {cutoff_freq/1000:.1f} kHz")
+    print(f"Chunk {chunk_num}: Current estimate: {cutoff_freq/1000:.1f} kHz")
     
-    return cutoff_freq
+    return cutoff_freq, freqs, db
 
-def get_lowpass_cutoff(input_file, start_time=None, end_time=None):
-    """Main processing function with input seeking"""
+def get_lowpass_cutoff(input_file, start_time=None, end_time=None, plot_path=None):
+    """Main processing function with input seeking and plotting"""
     # Build ffmpeg command with input seeking
     ffmpeg_cmd = [
         'ffmpeg',
@@ -168,6 +169,7 @@ def get_lowpass_cutoff(input_file, start_time=None, end_time=None):
     chunk_size = sample_rate * 10  # 10-second chunks
     bytes_per_sample = 2
     cutoff_values = []
+    plot_data = None
 
     with subprocess.Popen(ffmpeg_cmd, stdout=subprocess.PIPE) as proc:
         chunk_num = 0
@@ -187,9 +189,14 @@ def get_lowpass_cutoff(input_file, start_time=None, end_time=None):
                 continue
 
             # Process chunk
-            cutoff = process_chunk(audio, sample_rate, chunk_num)
-            if cutoff is not None:
+            result = process_chunk(audio, sample_rate, chunk_num)
+            if result is not None:
+                cutoff, freqs, db = result
                 cutoff_values.append(cutoff)
+                
+                # Store first valid chunk data for plotting
+                if plot_path and plot_data is None:
+                    plot_data = (freqs, db)
             
             chunk_num += 1
 
@@ -199,6 +206,24 @@ def get_lowpass_cutoff(input_file, start_time=None, end_time=None):
     # Calculate final result using median
     final_cutoff = np.median(cutoff_values) / 1000
     print(f"\nFinal lowpass cutoff frequency: {final_cutoff:.1f} kHz")
+
+    # Generate plot
+    if plot_path and plot_data is not None:
+        freqs, db = plot_data
+        plt.figure(figsize=(12, 6))
+        plt.semilogx(freqs, db)
+        plt.axvline(final_cutoff * 1000, color='r', linestyle='--',
+                   label=f'Cutoff: {final_cutoff:.1f} kHz (-3dB)')
+        plt.xlabel('Frequency (Hz)')
+        plt.ylabel('Magnitude (dB)')
+        plt.title('Lowpass Cutoff Analysis')
+        plt.legend()
+        plt.grid(True)
+        plt.xlim(10000, 22000)
+        plt.ylim(-60, 5)
+        plt.savefig(plot_path)
+        plt.close()
+
     return final_cutoff
 
 if __name__ == "__main__":
@@ -206,13 +231,15 @@ if __name__ == "__main__":
     parser.add_argument('input_file', help='Input audio file (M4A)')
     parser.add_argument('--ss', type=float, help='Start time in seconds')
     parser.add_argument('--to', type=float, help='End time in seconds')
+    parser.add_argument('--plot', help='Save spectrum plot to file')
     args = parser.parse_args()
 
     try:
         cutoff = get_lowpass_cutoff(
             args.input_file,
             start_time=args.ss,
-            end_time=args.to
+            end_time=args.to,
+            plot_path=args.plot
         )
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
