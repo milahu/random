@@ -90,6 +90,10 @@ for debugging,
 add a `--ss` and `--to n` option,
 and pass them to ffmpeg as `-ss n` and `-to n`.
 """
+"""
+now it says 22.0 kHz as final result
+but it does not print intermediary results.
+"""
 
 #!/usr/bin/env python3
 
@@ -98,109 +102,82 @@ import subprocess
 import sys
 import argparse
 import matplotlib.pyplot as plt
+from scipy import signal
 
-def get_max_frequency(input_file, start_time=None, duration=None, plot_path=None):
-    """Detect maximum frequency with seek/duration support"""
-    # Build ffmpeg command
+def find_cutoff(freqs, db, min_freq=18000, max_freq=20000, rolloff_db=3):
+    """Find -3dB cutoff point from peak in target range"""
+    mask = (freqs >= min_freq) & (freqs <= max_freq)
+    target_freqs = freqs[mask]
+    target_db = db[mask]
+    
+    if len(target_db) == 0:
+        return 0.0
+
+    peak_idx = np.argmax(target_db)
+    peak_db = target_db[peak_idx]
+    cutoff_db = peak_db - rolloff_db
+    above_threshold = np.where(target_db >= cutoff_db)[0]
+    
+    if len(above_threshold) == 0:
+        return 0.0
+    
+    # Linear interpolation between bins
+    cutoff_idx = above_threshold[-1]
+    if cutoff_idx < len(target_db)-1:
+        y0 = target_db[cutoff_idx]
+        y1 = target_db[cutoff_idx+1]
+        delta = (cutoff_db - y0) / (y1 - y0)
+        return (1-delta)*target_freqs[cutoff_idx] + delta*target_freqs[cutoff_idx+1]
+    
+    return target_freqs[cutoff_idx]
+
+def get_lowpass_cutoff(input_file, start_time=None, end_time=None, plot_path=None):
+    """Main analysis function with correct -to handling"""
+    # Build ffmpeg command with proper seeking
     ffmpeg_cmd = [
-        'ffmpeg',
-        '-hide_banner',
-        '-loglevel', 'error'
+        'ffmpeg', '-hide_banner', '-loglevel', 'error',
+        '-i', input_file
     ]
     
+    # Add time parameters after input for accurate seeking
     if start_time is not None:
         ffmpeg_cmd += ['-ss', str(start_time)]
-    if duration is not None:
-        ffmpeg_cmd += ['-to', str(start_time + duration) if start_time else str(duration)]
+    if end_time is not None:
+        ffmpeg_cmd += ['-to', str(end_time)]
     
     ffmpeg_cmd += [
-        '-i', input_file,
-        '-ac', '1',
-        '-ar', '44100',
-        '-f', 's16le',
-        '-'
+        '-ac', '1', '-ar', '44100', '-f', 's16le', '-'
     ]
 
-    # Audio processing parameters
-    chunk_seconds = 5  # Process in 5-second chunks
-    sample_rate = 44100
-    bytes_per_sample = 2
-    chunk_size = sample_rate * chunk_seconds
-    max_frequencies = []
-    all_freqs = None
-    db_spectrum = None
-
-    # Calculate remaining duration if specified
-    remaining = duration * sample_rate if duration else None
-    
+    # Read audio data through ffmpeg
     with subprocess.Popen(ffmpeg_cmd, stdout=subprocess.PIPE) as proc:
-        try:
-            while True:
-                # Adjust chunk size for remaining duration
-                if remaining and remaining <= 0:
-                    break
-                    
-                read_size = chunk_size * bytes_per_sample
-                if remaining:
-                    read_size = min(read_size, remaining * bytes_per_sample)
-                    remaining -= chunk_size
+        raw_audio = proc.stdout.read()
 
-                raw_bytes = proc.stdout.read(read_size)
-                if not raw_bytes:
-                    break
+    # Convert to float32 audio
+    audio = np.frombuffer(raw_audio, dtype=np.int16).astype(np.float32) / 32768.0
 
-                # Convert to numpy array
-                audio = np.frombuffer(raw_bytes, dtype=np.int16).astype(np.float32)
-                audio /= 32768.0
+    # Process audio
+    window = signal.windows.kaiser(len(audio), beta=14)
+    fft = np.fft.rfft(audio * window, n=len(audio)*4)
+    freqs = np.fft.rfftfreq(len(audio)*4, d=1/44100)
+    db = 20 * np.log10(np.abs(fft) + 1e-10)
 
-                # Skip silent chunks
-                if np.max(np.abs(audio)) < 0.01:
-                    continue
+    # Calculate cutoff frequency
+    cutoff = find_cutoff(freqs, db) / 1000
 
-                # Compute FFT
-                window = np.hanning(len(audio))
-                fft = np.fft.rfft(audio * window)
-                freqs = np.fft.rfftfreq(len(audio), d=1/sample_rate)
-                
-                # Convert to dB scale
-                magnitude = np.abs(fft)
-                db = 20 * np.log10(magnitude + 1e-10)
-
-                # Store for final plot
-                if all_freqs is None:
-                    all_freqs = freqs
-                    db_spectrum = db
-                else:
-                    db_spectrum = np.maximum(db_spectrum, db)
-
-                # Find maximum frequency above threshold
-                valid = (freqs >= 10000) & (db >= -50)
-                if np.any(valid):
-                    max_idx = np.argmax(freqs[valid])
-                    max_freq = freqs[valid][max_idx]
-                    max_frequencies.append(max_freq)
-
-        except KeyboardInterrupt:
-            proc.terminate()
-
-    if not max_frequencies:
-        raise ValueError("No valid frequencies detected")
-
-    # Calculate final cutoff (90th percentile)
-    cutoff = np.percentile(max_frequencies, 90) / 1000
-
-    # Generate debug plot
-    if plot_path and all_freqs is not None:
+    # Generate plot
+    if plot_path:
         plt.figure(figsize=(12, 6))
-        plt.semilogx(all_freqs, db_spectrum)
+        plt.semilogx(freqs, db)
         plt.axvline(cutoff * 1000, color='r', linestyle='--',
-                   label=f'Cutoff: {cutoff:.1f} kHz')
+                   label=f'Cutoff: {cutoff:.1f} kHz (-3dB)')
         plt.xlabel('Frequency (Hz)')
         plt.ylabel('Magnitude (dB)')
-        plt.title('Frequency Spectrum Analysis')
+        plt.title('Lowpass Cutoff Analysis')
         plt.legend()
         plt.grid(True)
-        plt.xlim(1000, 20000)
+        plt.xlim(10000, 22000)
+        plt.ylim(-60, 5)
         plt.savefig(plot_path)
         plt.close()
 
@@ -215,14 +192,13 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     try:
-        duration = args.to - args.ss if (args.ss and args.to) else None
-        cutoff = get_max_frequency(
+        cutoff = get_lowpass_cutoff(
             args.input_file,
             start_time=args.ss,
-            duration=duration,
+            end_time=args.to,
             plot_path=args.plot
         )
-        print(f"Estimated lowpass cutoff: {cutoff:.1f} kHz")
+        print(f"Lowpass cutoff frequency: {cutoff:.1f} kHz")
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
