@@ -49,6 +49,13 @@ increase the buffer size
 to make the loop run
 at a lower frequency.
 """
+"""
+something is wrong here.
+the script keeps printing 0 khz
+but it should be about 19.6 khz
+pretty much from the start
+in my example.
+"""
 
 #!/usr/bin/env python3
 
@@ -62,7 +69,7 @@ import matplotlib.pyplot as plt
 
 def stream_audio_analysis(m4a_file_path, plot_path=None):
     """Process audio in chunks using ffmpeg stdout streaming"""
-    # FFmpeg command for raw PCM output (no headers)
+    # FFmpeg command for raw PCM output
     ffmpeg_cmd = [
         'ffmpeg',
         '-i', m4a_file_path,
@@ -74,14 +81,14 @@ def stream_audio_analysis(m4a_file_path, plot_path=None):
 
     # Start ffmpeg process
     proc = subprocess.Popen(ffmpeg_cmd,
-      stdout=subprocess.PIPE,
-      stderr=subprocess.PIPE,
-      bufsize=10**8,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        bufsize=10**8,
     )
 
     # Audio processing parameters
     sample_rate = 44100
-    chunk_duration = 60  # seconds per chunk (increased buffer size)
+    chunk_duration = 10  # seconds per chunk
     chunk_size = sample_rate * chunk_duration
     bytes_per_sample = 2  # 16-bit = 2 bytes
     fft_sum = None
@@ -99,31 +106,51 @@ def stream_audio_analysis(m4a_file_path, plot_path=None):
             chunk = np.frombuffer(raw_bytes, dtype=np.int16).astype(np.float32)
             chunk /= 32768.0  # Normalize to [-1, 1]
 
-            # Process chunk
-            windowed = chunk * signal.windows.hann(len(chunk))
-            fft_result = np.fft.rfft(windowed)
+            # Skip silent chunks
+            if np.max(np.abs(chunk)) < 0.001:
+                continue
+
+            # Apply window and compute FFT with proper scaling
+            window = signal.windows.hann(len(chunk))
+            windowed = chunk * window
+            fft_result = np.fft.rfft(windowed) * 2 / np.sum(window)  # Window compensation
+            
             fft_mag = np.abs(fft_result)
+            fft_power = fft_mag ** 2  # Use power spectrum instead of magnitude
 
             if fft_sum is None:
-                fft_sum = fft_mag
+                fft_sum = fft_power
                 frequencies = np.fft.rfftfreq(len(chunk), d=1.0/sample_rate)
             else:
-                fft_sum += fft_mag
+                fft_sum += fft_power
             total_chunks += 1
 
-            # Calculate intermediate results
+            # Calculate intermediate results using power spectrum
             current_avg = fft_sum / total_chunks
-            current_db = 20 * np.log10(current_avg + 1e-10)
-            peak_db = np.max(current_db)
-            target_db = peak_db - 3
-            above_threshold = np.where(current_db >= target_db)[0]
+            current_db = 10 * np.log10(current_avg + 1e-10)  # Power to dB
             
-            cutoff_freq = frequencies[above_threshold[-1]] if len(above_threshold) > 0 else frequencies[-1]
+            # Find peak in high-frequency range (1kHz-20kHz)
+            hf_mask = (frequencies >= 1000) & (frequencies <= 20000)
+            if not np.any(hf_mask):
+                continue
+                
+            peak_db = np.max(current_db[hf_mask])
+            target_db = peak_db - 3  # -3dB from HF peak
+            
+            # Find highest frequency above target
+            above_threshold = np.where(current_db >= target_db)[0]
+            valid_above = above_threshold[above_threshold <= np.max(np.where(hf_mask)[0])]
+            
+            if len(valid_above) > 0:
+                cutoff_freq = frequencies[valid_above[-1]]
+            else:
+                cutoff_freq = frequencies[np.max(np.where(hf_mask)[0])]
+            
             cutoff_khz = round(cutoff_freq / 500) * 0.5
             
             # Print intermediate results
-            print(f"Processed {total_chunks * chunk_duration} sec: "
-                  f"Current cutoff estimate: {cutoff_khz:.1f} kHz")
+            print(f"Chunk {total_chunks}: Cutoff estimate: {cutoff_khz:.1f} kHz "
+                  f"(Peak: {peak_db:.1f} dB @ {frequencies[np.argmax(current_db[hf_mask]) + np.where(hf_mask)[0][0]]:.0f} Hz)")
 
     finally:
         proc.terminate()
@@ -133,18 +160,23 @@ def stream_audio_analysis(m4a_file_path, plot_path=None):
             pass
 
     # Final calculation
+    if fft_sum is None:
+        raise ValueError("No valid audio data processed")
+    
     fft_avg = fft_sum / total_chunks
-    fft_db = 20 * np.log10(fft_avg + 1e-10)
+    fft_db = 10 * np.log10(fft_avg + 1e-10)
     
     # Find final cutoff frequency
-    peak_db = np.max(fft_db)
+    hf_mask = (frequencies >= 1000) & (frequencies <= 20000)
+    peak_db = np.max(fft_db[hf_mask])
     target_db = peak_db - 3
     above_threshold = np.where(fft_db >= target_db)[0]
+    valid_above = above_threshold[above_threshold <= np.max(np.where(hf_mask)[0])]
     
-    if len(above_threshold) > 0:
-        cutoff_freq = frequencies[above_threshold[-1]]
+    if len(valid_above) > 0:
+        cutoff_freq = frequencies[valid_above[-1]]
     else:
-        cutoff_freq = frequencies[-1]
+        cutoff_freq = frequencies[np.max(np.where(hf_mask)[0])]
     
     cutoff_khz = round(cutoff_freq / 500) * 0.5
     
@@ -155,7 +187,7 @@ def stream_audio_analysis(m4a_file_path, plot_path=None):
         plt.axvline(x=cutoff_freq, color='r', linestyle='--', 
                    label=f'Final cutoff: {cutoff_khz:.1f} kHz')
         plt.xlabel('Frequency (Hz)')
-        plt.ylabel('Magnitude (dB)')
+        plt.ylabel('Power (dB)')
         plt.title('Frequency Spectrum Analysis')
         plt.legend()
         plt.grid(True)
