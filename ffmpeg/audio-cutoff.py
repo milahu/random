@@ -104,7 +104,7 @@ import argparse
 import matplotlib.pyplot as plt
 from scipy import signal
 
-def process_chunk(audio, sample_rate, chunk_num):
+def process_chunk(audio, sample_rate, chunk_num, start_time):
     """Process 10-second audio chunk and return cutoff frequency estimate"""
     # Apply window function
     window = signal.windows.hann(len(audio))
@@ -138,7 +138,9 @@ def process_chunk(audio, sample_rate, chunk_num):
     cutoff_freq = target_freqs[cutoff_idx]
     
     # Print intermediate result
-    print(f"Chunk {chunk_num}: Current estimate: {cutoff_freq/1000:.1f} kHz")
+    # print(f"Chunk {chunk_num}: Current estimate: {cutoff_freq/1000:.1f} kHz")
+    chunk_time = start_time + chunk_num * 10
+    print(f"t={chunk_time}sec f={cutoff_freq/1000:.1f}kHz")
     
     return cutoff_freq, freqs, db
 
@@ -168,7 +170,8 @@ def get_lowpass_cutoff(input_file, start_time=None, end_time=None, plot_path=Non
     sample_rate = 44100
     chunk_size = sample_rate * 10  # 10-second chunks
     bytes_per_sample = 2
-    cutoff_values = []
+    # cutoff_values = []
+    final_cutoff = 0.0
     plot_data = None
 
     with subprocess.Popen(ffmpeg_cmd, stdout=subprocess.PIPE) as proc:
@@ -189,10 +192,11 @@ def get_lowpass_cutoff(input_file, start_time=None, end_time=None, plot_path=Non
                 continue
 
             # Process chunk
-            result = process_chunk(audio, sample_rate, chunk_num)
+            result = process_chunk(audio, sample_rate, chunk_num, start_time)
             if result is not None:
                 cutoff, freqs, db = result
-                cutoff_values.append(cutoff)
+                # cutoff_values.append(cutoff)
+                final_cutoff = max(cutoff, final_cutoff)
                 
                 # Store first valid chunk data for plotting
                 if plot_path and plot_data is None:
@@ -200,11 +204,13 @@ def get_lowpass_cutoff(input_file, start_time=None, end_time=None, plot_path=Non
             
             chunk_num += 1
 
-    if not cutoff_values:
+    # if not cutoff_values:
+    if final_cutoff == 0.0:
         raise ValueError("No valid audio chunks processed")
     
     # Calculate final result using MAXIMUM value  # <--- Only changed line
-    final_cutoff = np.max(cutoff_values) / 1000
+    # final_cutoff = np.max(cutoff_values) / 1000
+    final_cutoff = final_cutoff / 1000
     print(f"\nFinal lowpass cutoff frequency: {final_cutoff:.1f} kHz")
 
     # Generate plot
@@ -229,7 +235,7 @@ def get_lowpass_cutoff(input_file, start_time=None, end_time=None, plot_path=Non
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Detect audio lowpass cutoff frequency')
     parser.add_argument('input_file', help='Input audio file (M4A)')
-    parser.add_argument('--ss', type=float, help='Start time in seconds')
+    parser.add_argument('--ss', type=float, default=0.0, help='Start time in seconds')
     parser.add_argument('--to', type=float, help='End time in seconds')
     parser.add_argument('--plot', help='Save spectrum plot to file')
     args = parser.parse_args()
