@@ -72,181 +72,157 @@ also, it always says
 "Current peak: 0.5 kHz"
 which is waay too low
 """
+"""
+now it prints 17.8 kHz
+instead of 19.5 khz.
+closer but still not perfect
+"""
+"""
+you should
+1. get the spectrogram of a chunk
+2. remove noise (quiet signals)
+3. use `numpy.argmax` on the spectrogram
+to get the maximum frequency 
+"""
+"""
+the script just hangs.
+for debugging,
+add a `--ss` and `--to n` option,
+and pass them to ffmpeg as `-ss n` and `-to n`.
+"""
 
 #!/usr/bin/env python3
 
 import numpy as np
-from scipy import signal
 import subprocess
 import sys
+import argparse
 import matplotlib.pyplot as plt
-from queue import Queue
-from threading import Thread
 
-def read_stderr(proc, queue):
-    """Read stderr in a background thread to prevent blocking"""
-    while True:
-        chunk = proc.stderr.read(1024)
-        if not chunk:
-            break
-        queue.put(chunk)
-    queue.put(None)
-
-def process_audio_chunk(chunk, sample_rate, spectrum_sum, chunk_count, freqs):
-    """Process individual audio chunks and update spectrum analysis"""
-    # Normalize and apply window
-    chunk = chunk / 32768.0
-    window = signal.windows.hann(len(chunk))
-    windowed = chunk * window
-    
-    # Compute scaled FFT
-    fft = np.fft.rfft(windowed) * 2 / np.sum(window)  # Proper window compensation
-    power = np.abs(fft) ** 2
-    
-    # Initialize or accumulate spectrum
-    if spectrum_sum is None:
-        spectrum_sum = power
-        freqs = np.fft.rfftfreq(len(chunk), d=1/sample_rate)
-    else:
-        if len(spectrum_sum) != len(power):
-            return spectrum_sum, freqs, chunk_count  # Skip size mismatch
-        spectrum_sum += power
-    
-    return spectrum_sum, freqs, chunk_count + 1
-
-def detect_lowpass_cutoff(m4a_file_path, plot_path=None):
-    """Main detection function with robust streaming and analysis"""
-    # FFmpeg configuration
+def get_max_frequency(input_file, start_time=None, duration=None, plot_path=None):
+    """Detect maximum frequency with seek/duration support"""
+    # Build ffmpeg command
     ffmpeg_cmd = [
-        'ffmpeg', '-hide_banner',
-        '-i', m4a_file_path,
-        '-ac', '1',          # Mono
-        '-ar', '44100',      # Sample rate
-        '-f', 's16le',       # 16-bit little-endian PCM
+        'ffmpeg',
+        '-hide_banner',
+        '-loglevel', 'error'
+    ]
+    
+    if start_time is not None:
+        ffmpeg_cmd += ['-ss', str(start_time)]
+    if duration is not None:
+        ffmpeg_cmd += ['-to', str(start_time + duration) if start_time else str(duration)]
+    
+    ffmpeg_cmd += [
+        '-i', input_file,
+        '-ac', '1',
+        '-ar', '44100',
+        '-f', 's16le',
         '-'
     ]
 
     # Audio processing parameters
+    chunk_seconds = 5  # Process in 5-second chunks
     sample_rate = 44100
-    chunk_duration = 5  # Seconds per chunk (balance between responsiveness and stability)
-    chunk_size = sample_rate * chunk_duration
     bytes_per_sample = 2
+    chunk_size = sample_rate * chunk_seconds
+    max_frequencies = []
+    all_freqs = None
+    db_spectrum = None
+
+    # Calculate remaining duration if specified
+    remaining = duration * sample_rate if duration else None
     
-    # Start FFmpeg process
-    proc = subprocess.Popen(ffmpeg_cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        bufsize=chunk_size * bytes_per_sample * 2  # Double buffer for safety
-    )
-
-    # Start stderr reader
-    err_queue = Queue()
-    stderr_thread = Thread(target=read_stderr, args=(proc, err_queue))
-    stderr_thread.daemon = True
-    stderr_thread.start()
-
-    spectrum_sum = None
-    freqs = None
-    chunk_count = 0
-    cutoff_estimates = []
-
-    try:
-        while True:
-            # Process stderr output
-            while not err_queue.empty():
-                chunk = err_queue.get()
-                if chunk is None:
-                    break
-                sys.stderr.buffer.write(chunk)
-                sys.stderr.flush()
-
-            # Read audio data
-            raw_bytes = proc.stdout.read(chunk_size * bytes_per_sample)
-            if not raw_bytes:
-                break
-
-            # Convert to numpy array
-            audio_chunk = np.frombuffer(raw_bytes, dtype=np.int16)
-
-            # Skip silent chunks (threshold at -40dBFS)
-            if np.max(np.abs(audio_chunk)) < 3276:  # 10% of max int16
-                continue
-
-            # Process chunk
-            spectrum_sum, freqs, chunk_count = process_audio_chunk(
-                audio_chunk, sample_rate, spectrum_sum, chunk_count, freqs
-            )
-
-            # Periodic analysis (every 3 chunks)
-            if chunk_count > 0 and chunk_count % 3 == 0:
-                current_db = 10 * np.log10(spectrum_sum / chunk_count + 1e-10)
-                
-                # Focus on 15-21kHz range
-                mask = (freqs >= 15000) & (freqs <= 21000)
-                if not np.any(mask):
-                    continue
-                
-                target_db = current_db[mask]
-                target_freqs = freqs[mask]
-                
-                # Find -3dB cutoff from peak
-                peak_idx = np.argmax(target_db)
-                peak_db = target_db[peak_idx]
-                cutoff_db = peak_db - 3
-                
-                # Find highest frequency above cutoff
-                above_threshold = np.where(target_db >= cutoff_db)[0]
-                if len(above_threshold) > 0:
-                    cutoff_freq = target_freqs[above_threshold[-1]]
-                    cutoff_estimates.append(cutoff_freq / 1000)
-                    print(f"Chunk {chunk_count}: Current estimate: {cutoff_freq/1000:.1f} kHz")
-
-    except KeyboardInterrupt:
-        print("\nProcessing interrupted")
-    finally:
-        proc.terminate()
+    with subprocess.Popen(ffmpeg_cmd, stdout=subprocess.PIPE) as proc:
         try:
-            proc.wait(timeout=2)
-        except:
-            pass
+            while True:
+                # Adjust chunk size for remaining duration
+                if remaining and remaining <= 0:
+                    break
+                    
+                read_size = chunk_size * bytes_per_sample
+                if remaining:
+                    read_size = min(read_size, remaining * bytes_per_sample)
+                    remaining -= chunk_size
 
-    # Final analysis
-    if chunk_count == 0:
-        raise ValueError("No valid audio data processed")
+                raw_bytes = proc.stdout.read(read_size)
+                if not raw_bytes:
+                    break
 
-    final_db = 10 * np.log10(spectrum_sum / chunk_count + 1e-10)
-    mask = (freqs >= 15000) & (freqs <= 21000)
-    target_db = final_db[mask]
-    target_freqs = freqs[mask]
+                # Convert to numpy array
+                audio = np.frombuffer(raw_bytes, dtype=np.int16).astype(np.float32)
+                audio /= 32768.0
 
-    # Calculate median of last 5 estimates
-    final_cutoff = np.median(cutoff_estimates[-5:]) if cutoff_estimates else 0
+                # Skip silent chunks
+                if np.max(np.abs(audio)) < 0.01:
+                    continue
+
+                # Compute FFT
+                window = np.hanning(len(audio))
+                fft = np.fft.rfft(audio * window)
+                freqs = np.fft.rfftfreq(len(audio), d=1/sample_rate)
+                
+                # Convert to dB scale
+                magnitude = np.abs(fft)
+                db = 20 * np.log10(magnitude + 1e-10)
+
+                # Store for final plot
+                if all_freqs is None:
+                    all_freqs = freqs
+                    db_spectrum = db
+                else:
+                    db_spectrum = np.maximum(db_spectrum, db)
+
+                # Find maximum frequency above threshold
+                valid = (freqs >= 10000) & (db >= -50)
+                if np.any(valid):
+                    max_idx = np.argmax(freqs[valid])
+                    max_freq = freqs[valid][max_idx]
+                    max_frequencies.append(max_freq)
+
+        except KeyboardInterrupt:
+            proc.terminate()
+
+    if not max_frequencies:
+        raise ValueError("No valid frequencies detected")
+
+    # Calculate final cutoff (90th percentile)
+    cutoff = np.percentile(max_frequencies, 90) / 1000
 
     # Generate debug plot
-    if plot_path:
+    if plot_path and all_freqs is not None:
         plt.figure(figsize=(12, 6))
-        plt.plot(freqs, final_db)
-        plt.axvline(final_cutoff * 1000, color='r', linestyle='--',
-                   label=f'Estimated cutoff: {final_cutoff:.1f} kHz')
+        plt.semilogx(all_freqs, db_spectrum)
+        plt.axvline(cutoff * 1000, color='r', linestyle='--',
+                   label=f'Cutoff: {cutoff:.1f} kHz')
         plt.xlabel('Frequency (Hz)')
-        plt.ylabel('Power (dB)')
+        plt.ylabel('Magnitude (dB)')
         plt.title('Frequency Spectrum Analysis')
         plt.legend()
         plt.grid(True)
-        plt.xlim(10000, 20000)
+        plt.xlim(1000, 20000)
         plt.savefig(plot_path)
         plt.close()
 
-    return final_cutoff
+    return cutoff
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Usage: python detect_lowpass.py <input.m4a>")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description='Detect audio lowpass cutoff frequency')
+    parser.add_argument('input_file', help='Input audio file (M4A)')
+    parser.add_argument('--ss', type=float, help='Start time in seconds')
+    parser.add_argument('--to', type=float, help='End time in seconds')
+    parser.add_argument('--plot', help='Save spectrum plot to file')
+    args = parser.parse_args()
 
     try:
-        cutoff = detect_lowpass_cutoff(sys.argv[1], f"{sys.argv[1]}.spectrum.png")
-        print(f"\nFinal estimated lowpass cutoff: {cutoff:.1f} kHz")
+        duration = args.to - args.ss if (args.ss and args.to) else None
+        cutoff = get_max_frequency(
+            args.input_file,
+            start_time=args.ss,
+            duration=duration,
+            plot_path=args.plot
+        )
+        print(f"Estimated lowpass cutoff: {cutoff:.1f} kHz")
     except Exception as e:
-        print(f"Error: {str(e)}", file=sys.stderr)
+        print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
