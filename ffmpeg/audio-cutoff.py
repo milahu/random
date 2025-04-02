@@ -41,6 +41,14 @@ feel free to use
 a different format than wav
 to make the code easier.
 """
+"""
+for debugging, print the
+intermediate cutoff_khz result
+with every loop iteration.
+increase the buffer size
+to make the loop run
+at a lower frequency.
+"""
 
 #!/usr/bin/env python3
 
@@ -73,10 +81,12 @@ def stream_audio_analysis(m4a_file_path, plot_path=None):
 
     # Audio processing parameters
     sample_rate = 44100
-    chunk_size = sample_rate * 10  # 10 seconds per chunk
+    chunk_duration = 60  # seconds per chunk (increased buffer size)
+    chunk_size = sample_rate * chunk_duration
     bytes_per_sample = 2  # 16-bit = 2 bytes
     fft_sum = None
     total_chunks = 0
+    frequencies = None
     
     try:
         while True:
@@ -90,10 +100,9 @@ def stream_audio_analysis(m4a_file_path, plot_path=None):
             chunk /= 32768.0  # Normalize to [-1, 1]
 
             # Process chunk
-            fft_result = np.fft.rfft(chunk * signal.windows.hann(len(chunk)))
+            windowed = chunk * signal.windows.hann(len(chunk))
+            fft_result = np.fft.rfft(windowed)
             fft_mag = np.abs(fft_result)
-
-            # print("fft_mag", fft_mag)
 
             if fft_sum is None:
                 fft_sum = fft_mag
@@ -101,10 +110,20 @@ def stream_audio_analysis(m4a_file_path, plot_path=None):
             else:
                 fft_sum += fft_mag
             total_chunks += 1
+
+            # Calculate intermediate results
+            current_avg = fft_sum / total_chunks
+            current_db = 20 * np.log10(current_avg + 1e-10)
+            peak_db = np.max(current_db)
+            target_db = peak_db - 3
+            above_threshold = np.where(current_db >= target_db)[0]
             
-            # Early exit if we've processed enough data
-            # if total_chunks >= 6:  # ~60 seconds max
-            #     break
+            cutoff_freq = frequencies[above_threshold[-1]] if len(above_threshold) > 0 else frequencies[-1]
+            cutoff_khz = round(cutoff_freq / 500) * 0.5
+            
+            # Print intermediate results
+            print(f"Processed {total_chunks * chunk_duration} sec: "
+                  f"Current cutoff estimate: {cutoff_khz:.1f} kHz")
 
     finally:
         proc.terminate()
@@ -113,11 +132,11 @@ def stream_audio_analysis(m4a_file_path, plot_path=None):
         except:
             pass
 
-    # Calculate average FFT
-    fft_avg = fft_sum / total_chunks if total_chunks > 0 else np.zeros_like(fft_sum)
+    # Final calculation
+    fft_avg = fft_sum / total_chunks
     fft_db = 20 * np.log10(fft_avg + 1e-10)
     
-    # Find cutoff frequency
+    # Find final cutoff frequency
     peak_db = np.max(fft_db)
     target_db = peak_db - 3
     above_threshold = np.where(fft_db >= target_db)[0]
@@ -134,7 +153,7 @@ def stream_audio_analysis(m4a_file_path, plot_path=None):
         plt.figure(figsize=(10, 4))
         plt.semilogx(frequencies, fft_db)
         plt.axvline(x=cutoff_freq, color='r', linestyle='--', 
-                   label=f'Estimated cutoff: {cutoff_khz:.1f} kHz')
+                   label=f'Final cutoff: {cutoff_khz:.1f} kHz')
         plt.xlabel('Frequency (Hz)')
         plt.ylabel('Magnitude (dB)')
         plt.title('Frequency Spectrum Analysis')
@@ -157,7 +176,7 @@ if __name__ == "__main__":
     
     try:
         cutoff = detect_lowpass_cutoff(sys.argv[1])
-        print(f"Estimated lowpass cutoff frequency: {cutoff:.1f} kHz")
+        print(f"\nFinal estimated lowpass cutoff frequency: {cutoff:.1f} kHz")
     except Exception as e:
         print(f"Error: {str(e)}", file=sys.stderr)
         sys.exit(1)
