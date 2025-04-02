@@ -137,10 +137,14 @@ def process_chunk(audio, sample_rate, chunk_num, start_time):
     cutoff_idx = above_threshold[-1]
     cutoff_freq = target_freqs[cutoff_idx]
     
+    """
     # Print intermediate result
     # print(f"Chunk {chunk_num}: Current estimate: {cutoff_freq/1000:.1f} kHz")
-    chunk_time = start_time + chunk_num * 10
-    print(f"t={chunk_time}sec f={cutoff_freq/1000:.1f}kHz")
+    if chunk_num % 6 == 0:
+      chunk_time = start_time + chunk_num * 10
+      print(f"t={chunk_time}sec f={cutoff_freq/1000:.1f}kHz")
+      # todo print final_cutoff
+    """
     
     return cutoff_freq, freqs, db
 
@@ -198,6 +202,10 @@ def get_lowpass_cutoff(input_file, start_time=None, end_time=None, plot_path=Non
                 # cutoff_values.append(cutoff)
                 final_cutoff = max(cutoff, final_cutoff)
                 
+                if chunk_num % 6 == 0:
+                  chunk_time = start_time + chunk_num * 10
+                  print(f"t={chunk_time}sec f={final_cutoff/1000:.1f}kHz")
+
                 # Store first valid chunk data for plotting
                 if plot_path and plot_data is None:
                     plot_data = (freqs, db)
