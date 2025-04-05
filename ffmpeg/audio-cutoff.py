@@ -55,6 +55,9 @@ instead of 19.6KHz.
 ---
 the script returns 0.25KHz
 instead of 19.6KHz.
+---
+the script returns 23.99KHz
+instead of 19.6KHz.
 """
 
 #!/usr/bin/env python3
@@ -70,20 +73,24 @@ def parse_args():
     parser.add_argument('--to', type=float, help='End time in seconds')
     return parser.parse_args()
 
-def find_cutoff(fft_db, freqs, sample_rate):
-    """Find the frequency where energy drops significantly"""
-    # Smooth the spectrum to reduce noise impact
-    smoothed = np.convolve(fft_db, np.ones(5)/5, mode='same')
-    
-    # Find the peak frequency with significant energy
-    peaks, _ = find_peaks(smoothed, height=-50, prominence=10)
-    
-    if len(peaks) == 0:
+def find_aac_cutoff(fft_db, freqs, sample_rate):
+    """Specialized AAC lowpass cutoff detection"""
+    # 1. Find the global maximum in the upper frequency range (10-20kHz)
+    upper_band = (freqs > 10000) & (freqs < 20000)
+    if not np.any(upper_band):
         return 0
     
-    # The cutoff is the highest frequency peak
-    max_peak_idx = peaks[-1]
-    return freqs[max_peak_idx]
+    # 2. Find the point where spectrum drops by 20dB from peak
+    max_idx = np.argmax(fft_db[upper_band])
+    max_db = fft_db[upper_band][max_idx]
+    cutoff_db = max_db - 20  # AAC typically has sharp drop
+    
+    # 3. Find the first frequency below cutoff after the peak
+    for i in range(np.where(upper_band)[0][max_idx], len(fft_db)):
+        if fft_db[i] < cutoff_db:
+            return freqs[i]
+    
+    return freqs[-1]  # Return Nyquist if no drop found
 
 def analyze_chunk(audio_data, sample_rate):
     # Convert and normalize audio
@@ -93,20 +100,18 @@ def analyze_chunk(audio_data, sample_rate):
     window = np.hanning(len(audio_array))
     audio_windowed = audio_array * window
     
-    # Perform FFT
-    fft_result = np.fft.rfft(audio_windowed)
+    # Perform FFT with larger window
+    fft_result = np.fft.rfft(audio_windowed, n=65536)  # Increased FFT size
     fft_magnitude = np.abs(fft_result)
     fft_db = 20 * np.log10(fft_magnitude + 1e-12)
-    freqs = np.fft.rfftfreq(len(audio_array), d=1.0/sample_rate)
+    freqs = np.fft.rfftfreq(65536, d=1.0/sample_rate)
     
-    # Find cutoff frequency
-    cutoff_freq = find_cutoff(fft_db, freqs, sample_rate)
-    return cutoff_freq / 1000  # Convert to kHz
+    return find_aac_cutoff(fft_db, freqs, sample_rate) / 1000  # kHz
 
 def main():
     args = parse_args()
     
-    # Configure FFmpeg - using higher sample rate helps
+    # Configure FFmpeg with higher quality resampling
     ffmpeg_cmd = ['ffmpeg', '-hide_banner', '-loglevel', 'error']
     if args.ss: ffmpeg_cmd.extend(['-ss', str(args.ss)])
     if args.to: ffmpeg_cmd.extend(['-to', str(args.to)])
@@ -114,39 +119,37 @@ def main():
     ffmpeg_cmd.extend([
         '-i', args.input_file,
         '-f', 's16le', '-ac', '1', '-ar', '48000',
+        '-af', 'aresample=resampler=soxr',  # High-quality resampling
         '-acodec', 'pcm_s16le', '-'
     ])
     
-    chunk_duration = 5  # Smaller chunks for better resolution
+    chunk_duration = 5  # seconds
     sample_rate = 48000
     chunk_size = sample_rate * chunk_duration * 2
     
     print(f"Analyzing {args.input_file} for AAC lowpass cutoff...")
     
-    cutoff_freqs = []
+    cutoffs = []
     with subprocess.Popen(ffmpeg_cmd, stdout=subprocess.PIPE) as proc:
-        for chunk_num in range(1000):  # Safety limit
+        while True:
             audio_data = proc.stdout.read(chunk_size)
             if not audio_data or len(audio_data) < chunk_size:
                 break
             
             cutoff = analyze_chunk(audio_data, sample_rate)
-            t = chunk_num * chunk_duration
-            if cutoff > 1:  # Ignore very low frequencies
-                print(f"t={t}sec f={cutoff:.2f}KHz")
-                cutoff_freqs.append(cutoff)
+            if 15 < cutoff < 22:  # Only collect plausible AAC cutoffs
+                cutoffs.append(cutoff)
     
-    if cutoff_freqs:
-        avg_cutoff = np.median(cutoff_freqs)
-        print(f"\nDetected AAC lowpass cutoff: {avg_cutoff:.2f}KHz")
+    if cutoffs:
+        median_cutoff = np.median(cutoffs)
+        print(f"\nDetected AAC lowpass cutoff: {median_cutoff:.2f}KHz")
         
-        if avg_cutoff > 18: print("Quality: Fullband (high quality)")
-        elif avg_cutoff > 14: print("Quality: Wideband (good quality)")
-        elif avg_cutoff > 8: print("Quality: Medium band")
-        elif avg_cutoff > 3: print("Quality: Narrowband")
-        else: print("Quality: Very narrowband (low quality)")
+        if median_cutoff > 19: print("Quality: Fullband (high quality)")
+        elif median_cutoff > 16: print("Quality: Wideband (good quality)")
+        elif median_cutoff > 12: print("Quality: Medium band")
+        else: print("Quality: Narrowband")
     else:
-        print("No valid cutoff frequency detected")
+        print("No valid AAC cutoff detected")
 
 if __name__ == '__main__':
     main()
