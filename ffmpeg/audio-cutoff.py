@@ -27,7 +27,9 @@ in chunks of 10 seconds.
 for each chunk:
 detect the local maximum,
 print the local maximum
-and the chunk time,
+and the chunk time
+with the format
+f"t={t}sec f={f}KHz",
 update the global maximum.
 to detect the local maximum,
 remove the noise floor
@@ -52,7 +54,6 @@ import argparse
 import numpy as np
 import subprocess
 import sys
-from tempfile import NamedTemporaryFile
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Detect maximum frequency in M4A audio file')
@@ -61,12 +62,19 @@ def parse_args():
     parser.add_argument('--to', type=float, help='End time in seconds (passed to ffmpeg)')
     return parser.parse_args()
 
-def analyze_chunk(audio_data, sample_rate, chunk_start_time):
+def analyze_chunk(audio_data, sample_rate):
     # Convert bytes to numpy array of floats
     audio_array = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32)
     
+    # Normalize to [-1, 1]
+    audio_array /= 32768.0
+    
+    # Apply Hanning window to reduce spectral leakage
+    window = np.hanning(len(audio_array))
+    audio_windowed = audio_array * window
+    
     # Apply FFT
-    fft_result = np.fft.rfft(audio_array)
+    fft_result = np.fft.rfft(audio_windowed)
     fft_magnitude = np.abs(fft_result)
     
     # Convert to dB
@@ -112,8 +120,7 @@ def main():
     sample_rate = 44100
     chunk_size = sample_rate * chunk_duration * bytes_per_sample
     
-    print(f"Analyzing {args.input_file} in {chunk_duration}-second chunks...")
-    print("Time (s)\tMax Freq (kHz)")
+    print(f"Analyzing {args.input_file}...")
     
     with subprocess.Popen(ffmpeg_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as proc:
         chunk_num = 0
@@ -124,25 +131,25 @@ def main():
             if not audio_data:
                 break
             
-            local_max = analyze_chunk(audio_data, sample_rate, chunk_start_time)
-            print(f"{chunk_start_time:8.1f}\t{local_max:12.2f}")
+            local_max = analyze_chunk(audio_data, sample_rate)
+            print(f"t={chunk_start_time}sec f={local_max:.2f}KHz")
             
             if local_max > global_max_freq:
                 global_max_freq = local_max
             
             chunk_num += 1
     
-    print("\nGlobal maximum frequency: {:.2f} kHz".format(global_max_freq))
+    print(f"\nGlobal maximum frequency: {global_max_freq:.2f}KHz")
     
     # Classify quality based on maximum frequency
     if global_max_freq > 18:
-        print("Quality: Fullband (high quality)")
+        print("Quality: Fullband (high quality, ~20KHz)")
     elif global_max_freq > 7:
-        print("Quality: Wideband (medium quality)")
+        print("Quality: Wideband (medium quality, ~7-18KHz)")
     elif global_max_freq > 3:
-        print("Quality: Narrowband (low quality)")
+        print("Quality: Narrowband (low quality, ~3-7KHz)")
     else:
-        print("Quality: Very narrowband (very low quality)")
+        print("Quality: Very narrowband (very low quality, <3KHz)")
 
 if __name__ == '__main__':
     main()
