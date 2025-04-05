@@ -55,10 +55,9 @@ import argparse
 import numpy as np
 import subprocess
 import sys
-from scipy import signal
 
-def analyze_audio(file_path, start_time=None, end_time=None):
-    # FFmpeg command to read audio as PCM and pipe to stdout
+def analyze_audio(input_file, start_time=None, end_time=None):
+    # FFmpeg command to read audio and output as PCM samples
     cmd = [
         'ffmpeg',
         '-hide_banner',
@@ -71,70 +70,73 @@ def analyze_audio(file_path, start_time=None, end_time=None):
         cmd.extend(['-to', str(end_time)])
     
     cmd.extend([
-        '-i', file_path,
-        '-f', 'f32le',          # Output as 32-bit float PCM
-        '-ac', '1',             # Convert to mono
-        '-ar', '44100',         # Resample to 44.1kHz (standard for audio analysis)
-        '-acodec', 'pcm_f32le', # Output codec
-        '-'                     # Output to stdout
+        '-i', input_file,
+        '-ac', '1',               # Convert to mono
+        '-ar', '44100',           # Resample to 44.1kHz (standard for audio analysis)
+        '-f', 'f32le',           # Output as 32-bit float little-endian
+        '-acodec', 'pcm_f32le',
+        '-'
     ])
     
     process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     
-    chunk_size = 10 * 44100      # 10 seconds of audio at 44.1kHz
-    bytes_per_sample = 4         # 32-bit float = 4 bytes
+    chunk_size = 10 * 44100       # 10 seconds of audio at 44.1kHz
+    bytes_per_sample = 4          # 32-bit float = 4 bytes
     global_max_freq = 0
-    current_time = start_time if start_time is not None else 0
+    current_time = start_time if start_time else 0
     
     while True:
-        # Read chunk of audio data
+        # Read audio data
         raw_data = process.stdout.read(chunk_size * bytes_per_sample)
         if not raw_data:
             break
-            
+        
         # Convert to numpy array
-        audio = np.frombuffer(raw_data, dtype=np.float32)
+        samples = np.frombuffer(raw_data, dtype=np.float32)
         
-        if len(audio) == 0:
-            break
-            
-        # Apply window function and compute FFT
-        window = signal.windows.hann(len(audio))
-        spectrum = np.fft.rfft(audio * window)
-        power = 20 * np.log10(np.abs(spectrum) + 1e-10)  # Convert to dB
+        if len(samples) == 0:
+            current_time += 10
+            continue
         
-        # Find frequencies above noise floor (-110dB)
-        threshold = -110
-        valid_indices = np.where(power > threshold)[0]
+        # Compute FFT
+        fft_result = np.fft.rfft(samples)
+        fft_magnitude = np.abs(fft_result)
         
-        if len(valid_indices) == 0:
-            local_max_freq = 0
-        else:
-            # Get frequency corresponding to maximum power
-            max_index = valid_indices[-1]  # Highest frequency above threshold
-            local_max_freq = max_index * 44100 / (2 * len(audio))  # Convert to Hz
-            
+        # Convert to dB
+        fft_db = 20 * np.log10(fft_magnitude + 1e-12)  # Add small value to avoid log(0)
+        
+        # Remove noise floor (-110dB)
+        fft_db_clean = np.where(fft_db > -110, fft_db, -120)
+        
+        # Find the maximum frequency above -110dB
+        max_bin = np.argmax(fft_db_clean)
+        max_freq = max_bin * 44100 / len(samples)  # Convert bin to frequency
+        
         # Convert to KHz
-        local_max_freq_khz = local_max_freq / 1000
+        max_freq_khz = max_freq / 1000
         
         # Update global maximum
-        if local_max_freq_khz > global_max_freq:
-            global_max_freq = local_max_freq_khz
-            
-        print(f"t={current_time}sec f={local_max_freq_khz:.2f}KHz")
-        current_time += 10
+        if max_freq_khz > global_max_freq:
+            global_max_freq = max_freq_khz
         
-    process.stdout.close()
-    process.wait()
+        print(f"t={current_time}sec f={max_freq_khz:.2f}KHz")
+        current_time += 10
     
     print(f"\nGlobal maximum frequency: {global_max_freq:.2f}KHz")
-    return global_max_freq
+    
+    # Check if this is fullband or narrowband
+    if global_max_freq > 15:
+        print("Quality: Fullband (high quality)")
+    elif global_max_freq > 5:
+        print("Quality: Wideband (medium quality)")
+    else:
+        print("Quality: Narrowband (low quality)")
 
 def main():
-    parser = argparse.ArgumentParser(description='Detect maximum frequency in an M4A audio file.')
+    parser = argparse.ArgumentParser(description='Detect maximum frequency in an M4A audio file')
     parser.add_argument('input_file', help='Input M4A audio file')
-    parser.add_argument('--ss', type=float, help='Start time in seconds (passed to ffmpeg)')
-    parser.add_argument('--to', type=float, help='End time in seconds (passed to ffmpeg)')
+    parser.add_argument('--ss', type=float, help='Start time in seconds')
+    parser.add_argument('--to', type=float, help='End time in seconds')
     
     args = parser.parse_args()
     
