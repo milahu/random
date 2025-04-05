@@ -49,6 +49,9 @@ add a shebang line before the script.
 ---
 the script returns 0.22KHz
 instead of 19.6KHz.
+---
+the script returns 22.05KHz
+instead of 19.6KHz.
 """
 
 #!/usr/bin/env python3
@@ -58,101 +61,86 @@ import numpy as np
 import subprocess
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Detect maximum frequency in M4A audio file')
+    parser = argparse.ArgumentParser(description='Detect AAC encoder lowpass cutoff frequency')
     parser.add_argument('input_file', help='Input M4A audio file')
-    parser.add_argument('--ss', type=float, help='Start time in seconds (passed to ffmpeg)')
-    parser.add_argument('--to', type=float, help='End time in seconds (passed to ffmpeg)')
+    parser.add_argument('--ss', type=float, help='Start time in seconds')
+    parser.add_argument('--to', type=float, help='End time in seconds')
     return parser.parse_args()
 
-def analyze_chunk(audio_data, sample_rate):
-    # Convert bytes to numpy array of floats
-    audio_array = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32)
+def find_lowpass_cutoff(fft_db, freqs, sample_rate):
+    """Find the AAC encoder's lowpass cutoff frequency"""
+    # Typical AAC encoder leaves a drop of ~3dB at the cutoff point
+    max_db = np.max(fft_db)
+    cutoff_threshold = max_db - 3  # 3dB drop from peak
     
-    # Normalize to [-1, 1]
-    audio_array /= 32768.0
+    # Find all frequencies above threshold
+    above_threshold = fft_db >= cutoff_threshold
+    if not np.any(above_threshold):
+        return 0
+    
+    # The cutoff is the highest frequency with energy above threshold
+    return np.max(freqs[above_threshold])
+
+def analyze_chunk(audio_data, sample_rate):
+    # Convert to numpy array and normalize
+    audio_array = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
     
     # Apply window function
     window = np.hanning(len(audio_array))
     audio_windowed = audio_array * window
     
-    # Apply FFT
+    # Perform FFT
     fft_result = np.fft.rfft(audio_windowed)
     fft_magnitude = np.abs(fft_result)
-    
-    # Convert to dB
     fft_db = 20 * np.log10(fft_magnitude + 1e-12)
-    
-    # Create frequency bins
     freqs = np.fft.rfftfreq(len(audio_array), d=1.0/sample_rate)
     
-    # Find significant frequencies (above -60dB)
-    threshold = -60  # Less aggressive than -97dB
-    significant_bins = fft_db > threshold
-    
-    if not np.any(significant_bins):
-        return 0
-    
-    # Get the highest significant frequency
-    max_freq = np.max(freqs[significant_bins])
-    
-    return max_freq / 1000  # Convert to kHz
+    # Find the lowpass cutoff frequency
+    cutoff_freq = find_lowpass_cutoff(fft_db, freqs, sample_rate)
+    return cutoff_freq / 1000  # Convert to kHz
 
 def main():
     args = parse_args()
     
-    # Build ffmpeg command
+    # Configure FFmpeg command
     ffmpeg_cmd = ['ffmpeg', '-hide_banner', '-loglevel', 'error']
-    
-    if args.ss is not None:
-        ffmpeg_cmd.extend(['-ss', str(args.ss)])
-    if args.to is not None:
-        ffmpeg_cmd.extend(['-to', str(args.to)])
+    if args.ss: ffmpeg_cmd.extend(['-ss', str(args.ss)])
+    if args.to: ffmpeg_cmd.extend(['-to', str(args.to)])
     
     ffmpeg_cmd.extend([
         '-i', args.input_file,
-        '-f', 's16le',          # 16-bit little-endian PCM
-        '-ac', '1',             # mono
-        '-ar', '44100',        # sample rate
-        '-acodec', 'pcm_s16le', # output codec
-        '-'
+        '-f', 's16le', '-ac', '1', '-ar', '48000',  # Higher sample rate helps
+        '-acodec', 'pcm_s16le', '-'
     ])
     
-    global_max_freq = 0
     chunk_duration = 10  # seconds
-    bytes_per_sample = 2  # 16-bit = 2 bytes
-    sample_rate = 44100
-    chunk_size = sample_rate * chunk_duration * bytes_per_sample
+    sample_rate = 48000
+    chunk_size = sample_rate * chunk_duration * 2  # 2 bytes per sample
     
-    print(f"Analyzing {args.input_file}...")
+    print(f"Analyzing {args.input_file} for AAC lowpass cutoff...")
     
-    with subprocess.Popen(ffmpeg_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as proc:
-        chunk_num = 0
-        while True:
-            chunk_start_time = chunk_num * chunk_duration
+    global_max = 0
+    with subprocess.Popen(ffmpeg_cmd, stdout=subprocess.PIPE) as proc:
+        for chunk_num in range(1000):  # Safety limit
             audio_data = proc.stdout.read(chunk_size)
-            
-            if not audio_data:
+            if not audio_data or len(audio_data) < chunk_size:
                 break
             
-            local_max = analyze_chunk(audio_data, sample_rate)
-            print(f"t={chunk_start_time}sec f={local_max:.2f}KHz")
+            cutoff = analyze_chunk(audio_data, sample_rate)
+            t = chunk_num * chunk_duration
+            print(f"t={t}sec f={cutoff:.2f}KHz")
             
-            if local_max > global_max_freq:
-                global_max_freq = local_max
-            
-            chunk_num += 1
+            if cutoff > global_max:
+                global_max = cutoff
     
-    print(f"\nGlobal maximum frequency: {global_max_freq:.2f}KHz")
+    print(f"\nDetected AAC lowpass cutoff: {global_max:.2f}KHz")
     
-    # Classify quality
-    if global_max_freq > 18:
-        print("Quality: Fullband (high quality, ~20KHz)")
-    elif global_max_freq > 7:
-        print("Quality: Wideband (medium quality, ~7-18KHz)")
-    elif global_max_freq > 3:
-        print("Quality: Narrowband (low quality, ~3-7KHz)")
-    else:
-        print("Quality: Very narrowband (very low quality, <3KHz)")
+    # Quality classification
+    if global_max > 19: print("Quality: Fullband (high quality)")
+    elif global_max > 15: print("Quality: Wideband (good quality)")
+    elif global_max > 10: print("Quality: Medium band")
+    elif global_max > 5: print("Quality: Narrowband")
+    else: print("Quality: Very narrowband (low quality)")
 
 if __name__ == '__main__':
     main()
