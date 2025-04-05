@@ -46,6 +46,9 @@ must come before the -i arg
 for ffmpeg input seeking.
 print all frequencies in KHz.
 add a shebang line before the script.
+---
+the script returns 0.22KHz
+instead of 19.6KHz.
 """
 
 #!/usr/bin/env python3
@@ -53,7 +56,6 @@ add a shebang line before the script.
 import argparse
 import numpy as np
 import subprocess
-import sys
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Detect maximum frequency in M4A audio file')
@@ -69,7 +71,7 @@ def analyze_chunk(audio_data, sample_rate):
     # Normalize to [-1, 1]
     audio_array /= 32768.0
     
-    # Apply Hanning window to reduce spectral leakage
+    # Apply window function
     window = np.hanning(len(audio_array))
     audio_windowed = audio_array * window
     
@@ -78,21 +80,22 @@ def analyze_chunk(audio_data, sample_rate):
     fft_magnitude = np.abs(fft_result)
     
     # Convert to dB
-    fft_db = 20 * np.log10(fft_magnitude + 1e-12)  # Add small value to avoid log(0)
+    fft_db = 20 * np.log10(fft_magnitude + 1e-12)
     
-    # Remove noise floor (around -97dB)
-    threshold = -97
-    fft_db_clean = np.where(fft_db > threshold, fft_db, -120)
+    # Create frequency bins
+    freqs = np.fft.rfftfreq(len(audio_array), d=1.0/sample_rate)
     
-    # Find the maximum frequency above threshold
-    max_idx = np.argmax(fft_db_clean)
-    max_freq = max_idx * sample_rate / len(audio_array)
-    max_db = fft_db_clean[max_idx]
+    # Find significant frequencies (above -60dB)
+    threshold = -60  # Less aggressive than -97dB
+    significant_bins = fft_db > threshold
     
-    # Only consider frequencies where the signal is significantly above noise
-    if max_db > threshold:
-        return max_freq / 1000  # Convert to kHz
-    return 0
+    if not np.any(significant_bins):
+        return 0
+    
+    # Get the highest significant frequency
+    max_freq = np.max(freqs[significant_bins])
+    
+    return max_freq / 1000  # Convert to kHz
 
 def main():
     args = parse_args()
@@ -109,7 +112,7 @@ def main():
         '-i', args.input_file,
         '-f', 's16le',          # 16-bit little-endian PCM
         '-ac', '1',             # mono
-        '-ar', '44100',        # sample rate (standard for analysis)
+        '-ar', '44100',        # sample rate
         '-acodec', 'pcm_s16le', # output codec
         '-'
     ])
@@ -141,7 +144,7 @@ def main():
     
     print(f"\nGlobal maximum frequency: {global_max_freq:.2f}KHz")
     
-    # Classify quality based on maximum frequency
+    # Classify quality
     if global_max_freq > 18:
         print("Quality: Fullband (high quality, ~20KHz)")
     elif global_max_freq > 7:
