@@ -47,6 +47,9 @@ for ffmpeg input seeking.
 print all frequencies in KHz.
 add a shebang line before the script,
 spaced by an empty line.
+---
+the script returns 0.24KHz
+instead of 19.6KHz.
 """
 
 #!/usr/bin/env python3
@@ -57,7 +60,6 @@ import subprocess
 import sys
 
 def analyze_audio(input_file, start_time=None, end_time=None):
-    # FFmpeg command to read audio and output as PCM samples
     cmd = [
         'ffmpeg',
         '-hide_banner',
@@ -71,51 +73,50 @@ def analyze_audio(input_file, start_time=None, end_time=None):
     
     cmd.extend([
         '-i', input_file,
-        '-ac', '1',               # Convert to mono
-        '-ar', '44100',           # Resample to 44.1kHz (standard for audio analysis)
-        '-f', 'f32le',           # Output as 32-bit float little-endian
+        '-ac', '1',
+        '-ar', '44100',
+        '-f', 'f32le',
         '-acodec', 'pcm_f32le',
         '-'
     ])
     
     process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     
-    chunk_size = 10 * 44100       # 10 seconds of audio at 44.1kHz
-    bytes_per_sample = 4          # 32-bit float = 4 bytes
+    chunk_size = 10 * 44100
+    bytes_per_sample = 4
     global_max_freq = 0
     current_time = start_time if start_time else 0
     
     while True:
-        # Read audio data
         raw_data = process.stdout.read(chunk_size * bytes_per_sample)
         if not raw_data:
             break
         
-        # Convert to numpy array
         samples = np.frombuffer(raw_data, dtype=np.float32)
-        
         if len(samples) == 0:
             current_time += 10
             continue
         
-        # Compute FFT
-        fft_result = np.fft.rfft(samples)
-        fft_magnitude = np.abs(fft_result)
+        # Apply window function
+        window = np.hanning(len(samples))
+        windowed_samples = samples * window
         
-        # Convert to dB
-        fft_db = 20 * np.log10(fft_magnitude + 1e-12)  # Add small value to avoid log(0)
+        # Normalized FFT
+        fft_result = np.fft.rfft(windowed_samples)
+        fft_magnitude = np.abs(fft_result) / len(samples)  # Normalization
         
-        # Remove noise floor (-110dB)
-        fft_db_clean = np.where(fft_db > -110, fft_db, -120)
+        # Convert to dBFS
+        fft_db = 20 * np.log10(fft_magnitude + 1e-12)
         
-        # Find the maximum frequency above -110dB
+        # Remove noise floor
+        fft_db_clean = np.where(fft_db > -110, fft_db, -np.inf)
+        
+        # Find maximum frequency
         max_bin = np.argmax(fft_db_clean)
-        max_freq = max_bin * 44100 / len(samples)  # Convert bin to frequency
+        max_freq = max_bin * (44100 / 2) / (len(samples) / 2)  # Correct frequency calculation
         
-        # Convert to KHz
         max_freq_khz = max_freq / 1000
         
-        # Update global maximum
         if max_freq_khz > global_max_freq:
             global_max_freq = max_freq_khz
         
@@ -124,7 +125,6 @@ def analyze_audio(input_file, start_time=None, end_time=None):
     
     print(f"\nGlobal maximum frequency: {global_max_freq:.2f}KHz")
     
-    # Check if this is fullband or narrowband
     if global_max_freq > 15:
         print("Quality: Fullband (high quality)")
     elif global_max_freq > 5:
@@ -139,7 +139,6 @@ def main():
     parser.add_argument('--to', type=float, help='End time in seconds')
     
     args = parser.parse_args()
-    
     analyze_audio(args.input_file, args.ss, args.to)
 
 if __name__ == '__main__':
