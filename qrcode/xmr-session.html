@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<!--
+based on
+https://www.geeksforgeeks.org/how-to-make-a-qr-code-generator-using-qrcode-js/
+-->
+
+<script>
+// TODO change values
+var xmr_id = "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+var session_id = "000000000000000000000000000000000000000000000000000000000000000000";
+var session_user = "some_user";
+</script>
+
+<head>
+    <meta charset="UTF-8" />
+    <title>QR Code</title>
+    <style>
+        body {
+          font-family: sans-serif;
+          text-align: center;
+        }
+        h1, h2, h3 {
+          font-weight: normal;
+          margin: 0.5em;
+        }
+        table {
+          width: 100%;
+        }
+        td {
+          padding: 1em;
+          text-align: center;
+        }
+        pre {
+          word-wrap: break-word;
+          overflow-wrap: break-word;
+          white-space: pre-wrap;
+          width: 28em;
+          text-align: left;
+          display: inline-block;
+        }
+        div {
+          display: inline-block;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+
+<table>
+<tr>
+<td>
+<h2>XMR</h2>
+<div id="xmr_qrcode"></div>
+<br>
+<pre id="xmr_id"></pre>
+</td>
+<td>
+<h2>Session: <span id="session_user"></span></h2>
+<div id="session_qrcode"></div>
+<br>
+<pre id="session_id"></pre>
+</td>
+</tr>
+</table>
+
+<script>
+// https://stackoverflow.com/questions/6259515/how-can-i-split-a-string-into-segments-of-n-characters
+function four_chars(str) {
+  return str.match(/.{1,4}/g).join(" ");
+}
+
+var qrcode = new QRCode("xmr_qrcode", xmr_id);
+var qrcode = new QRCode("session_qrcode", session_id);
+
+document.getElementById("session_user").innerText = session_user;
+document.getElementById("xmr_id").innerText = four_chars(xmr_id);
+document.getElementById("session_id").innerText = four_chars(session_id);
+</script>
+
+</body>
+
+</html>
