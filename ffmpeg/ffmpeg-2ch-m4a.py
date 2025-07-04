@@ -4,6 +4,7 @@ import shlex
 import argparse
 import time
 import os
+import shutil
 
 
 
@@ -379,6 +380,8 @@ class VideoProcessor:
           output_ext = "flac"
         elif self.wav:
           output_ext = "wav"
+        elif self.args.mp3:
+          output_ext = "mp3"
         else:
           output_ext = "m4a"
         output_file = f"{self.input_file}.{self.audio_stream_index}.2ch.{output_ext}"
@@ -407,6 +410,11 @@ class VideoProcessor:
         elif self.wav:
           # default: pcm_s16le
           pass
+        elif self.args.mp3:
+          command += [
+            "-c:a", "libmp3lame",
+            "-b:a", "320k",
+          ]
         else:
           command += [
             # todo use fdk_aac or qaac
@@ -463,6 +471,7 @@ if __name__ == "__main__":
     # note: flac is better than wav
     # Filesize 6815932518 invalid for wav, output file will be broken
     parser.add_argument("--wav", action="store_true", help="produce wav file")
+    parser.add_argument("--mp3", action="store_true", help="produce mp3 file")
 
     args = parser.parse_args()
     
