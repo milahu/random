@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+# TODO maybe calibrate --page-height for your system
+
 sender_address = ", ".join([
   "Milan Hauth",
   "Jägerstr 10",
@@ -46,10 +48,11 @@ output_html = """\
     }
     :root {
       --page-width: 210mm;
-      /* actually 297mm but chrome says no
-      --page-height: 297mm;
-      */
-      --page-height: 298mm;
+
+      /* actually 297mm but chrome says no */
+      /* TODO maybe calibrate --page-height for your system */
+      --page-height: calc(297mm + 1.449mm);
+
       --label-width: 105mm;
       --label-height: 57mm;
       --num-labels-per-page-width: """ + str(num_labels_per_page_width) + """;
