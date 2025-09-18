@@ -12,6 +12,11 @@
 
 # tested with mkvinfo v93.0
 
+# FIXME files reported as "not streamable"
+# still can be played with `cat src.mkv | mpv -`
+# practically all MKV files are streamable
+# exceptions are really rare (or non-existant?)
+
 # https://stackoverflow.com/a/79768193/10440128
 
 import os
