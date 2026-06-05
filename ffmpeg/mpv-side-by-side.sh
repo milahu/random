@@ -11,13 +11,27 @@
 set -e
 set -u
 
-IFS=x read w1 h1 < <(ffprobe-get-video-resolution.sh "$1")
-IFS=x read w2 h2 < <(ffprobe-get-video-resolution.sh "$2")
+function ffprobe-get-video-resolution() {
+  ffprobe -i "$1" -loglevel 0 -select_streams v -show_streams -of json | jq -r '"\(.streams[0].width)x\(.streams[0].height)"'
+}
+
+IFS=x read w1 h1 < <(ffprobe-get-video-resolution "$1")
+IFS=x read w2 h2 < <(ffprobe-get-video-resolution "$2")
 
 echo "w1: $w1"; echo "h1: $h1"
 echo "w2: $w2"; echo "h2: $h2"
 
 border=5
+
+scale1f=
+scale2f=
+
+delay1=${3:-0} # can be positive or negative
+# delay2=${4:-0}
+
+delay1f="setpts=PTS+${delay1}/TB ,"
+# delay2f="setpts=PTS+${delay2}/TB ,"
+delay2f=
 
 if [ "$w1" = "$w2" ]; then
   # same width
@@ -40,13 +54,25 @@ if [ "$w1" = "$w2" ]; then
     fi
   fi
 else
-  echo "FIXME handle w1 != w2"
-  exit 1
+  # choose a common height (avoid upscaling)
+  target_h=$(( h1 < h2 ? h1 : h2 ))
+
+  # scale both videos to same height
+  scale1f="scale=-2:${target_h} ,"
+  scale2f="scale=-2:${target_h} ,"
+
+  # compute resulting widths after scaling
+  scaled_w1=$(( w1 * target_h / h1 ))
+  scaled_w2=$(( w2 * target_h / h2 ))
+
+  # crop halves (same logic as before, but now valid)
+  crop1="$((scaled_w1 / 2 + border)):${target_h}:0:0"
+  crop2="$((scaled_w2 / 2 + border)):${target_h}:$((scaled_w2 / 2 + border)):0"
 fi
 
 filter="$(
-  echo "[vid1] crop=$crop1 [vid1_crop];"
-  echo "[vid2] crop=$crop2 [vid2_crop];"
+  echo "[vid1] $delay1f $scale1f crop=$crop1 [vid1_crop];"
+  echo "[vid2] $delay2f $scale2f crop=$crop2 [vid2_crop];"
   echo "[vid1_crop][vid2_crop] hstack [vo];"
 )"
 
