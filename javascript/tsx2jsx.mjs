@@ -82,6 +82,8 @@ console.log(`globStr = ${globStr}`)
 const todoTransform = [];
 
 for (const fi of await glob(globStr)) {
+
+  if (fi.startsWith("node_modules/")) continue;
   
   //console.log(fi); continue; // debug
 
@@ -99,6 +101,10 @@ for (const fi of await glob(globStr)) {
   const fo = fi.split('.').slice(0, -1).join('.') + '.' + foExt;
   console.log(`rename: ${fi} -> ${fo}`);
   spawnSync('git', ['mv', '-v', fi, fo]); // rename
+  if (fs.existsSync(fi)) {
+    // this file is not tracked by git
+    fs.renameSync(fi, fo);
+  }
   todoTransform.push([fi, fo]);
 }
 if (todoTransform.length == 0) {
