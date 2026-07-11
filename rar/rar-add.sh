@@ -58,6 +58,6 @@ rar_args=(rar a "${switches[@]}" "$archive_file")
 
 echo -n "rar command:"; printf " %q" "${rar_args[@]}"; echo
 
-find "${input_files[@]}" -print0 |
+find "${input_files[@]}" -not -type d -print0 |
 LANG=C sort -z |
 xargs -0 -r "${rar_args[@]}"
